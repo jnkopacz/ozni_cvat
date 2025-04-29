@@ -250,3 +250,21 @@ textarea.ant-input.cvat-raw-labels-viewer {
         }
     }
 }
+
+.cvat-labels-explorer {
+    padding: 16px;
+    background: white;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+
+    .ant-card {
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        margin-bottom: 16px;
+    }
+
+    .ant-table-wrapper {
+        .ant-table-cell {
+            padding: 8px;
+        }
+    }
+}

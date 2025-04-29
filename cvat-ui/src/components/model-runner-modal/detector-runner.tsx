@@ -14,6 +14,7 @@ import Switch from 'antd/lib/switch';
 import Tag from 'antd/lib/tag';
 import notification from 'antd/lib/notification';
 import { ArrowRightOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import Input from 'antd/lib/input';
 
 import CVATTooltip from 'components/common/cvat-tooltip';
 import { clamp } from 'utils/math';
@@ -41,6 +42,7 @@ export interface DetectorRequestBody {
     mapping: ServerMapping;
     cleanup: boolean;
     conv_mask_to_poly: boolean;
+    text_prompt?: string;
 }
 
 function convertMappingToServer(mapping: FullMapping): ServerMapping {
@@ -73,6 +75,7 @@ function DetectorRunner(props: Props): JSX.Element {
     const [mapping, setMapping] = useState<FullMapping>([]);
     const [convertMasksToPolygons, setConvertMasksToPolygons] = useState<boolean>(false);
     const [detectorThreshold, setDetectorThreshold] = useState<number | null>(null);
+    const [textPrompt, setTextPrompt] = useState<string>('');
     const [modelLabels, setModelLabels] = useState<LabelInterface[]>([]);
     const [taskLabels, setTaskLabels] = useState<LabelInterface[]>([]);
 
@@ -81,6 +84,12 @@ function DetectorRunner(props: Props): JSX.Element {
     const isReId = model?.kind === ModelKind.REID;
     const convertMasks2PolygonVisible = isDetector &&
         [LabelType.ANY, LabelType.MASK].includes(model.returnType);
+    console.log("--------------------------------");
+    console.log(model);
+    console.log(model?.kind, isDetector);
+    console.log(mapping)
+    console.log("--------------------------------");
+    const supportsTextPrompt = model?.kind === ModelKind.DETECTOR && model?.name === 'Grounding DINO';
 
     const buttonEnabled = model && (isReId || (isDetector && mapping.length));
 
@@ -106,6 +115,10 @@ function DetectorRunner(props: Props): JSX.Element {
             })),
         }));
 
+        console.log("Task labels:", converted);
+        console.log("Model labels:", model?.labels);
+        console.log("Label mapping:", mapping);
+
         setTaskLabels(converted);
         if (model) {
             setModelLabels(model.labels);
@@ -128,6 +141,7 @@ function DetectorRunner(props: Props): JSX.Element {
                         style={{ width: '100%' }}
                         onChange={(_modelID: string): void => {
                             setModelID(_modelID);
+                            setTextPrompt('');
                         }}
                     >
                         {models.map(
@@ -140,25 +154,37 @@ function DetectorRunner(props: Props): JSX.Element {
                     </Select>
                 </Col>
             </Row>
+            {isDetector && supportsTextPrompt && (
+                <Row align='middle' className='cvat-detector-runner-text-prompt-wrapper'>
+                    <Col span={4}>Text Prompt:</Col>
+                    <Col span={20}>
+                        <Input
+                            placeholder="Enter detection prompt"
+                            value={textPrompt}
+                            onChange={(e) => setTextPrompt(e.target.value)}
+                        />
+                    </Col>
+                </Row>
+            )}
             {isDetector && (
-                <div>
-                    <div className='cvat-detector-runner-mapping-header'>
-                        <div>
-                            <Text strong>Setup mapping between labels and attributes</Text>
-                        </div>
-                        <div>
-                            <Tag>Model Spec</Tag>
-                            <ArrowRightOutlined />
-                            <Tag>CVAT Spec</Tag>
-                        </div>
+                <div className='cvat-detector-runner-mapping-header'>
+                    <div>
+                        <Text strong>Setup mapping between labels and attributes</Text>
                     </div>
-                    <LabelsMapperComponent
-                        key={modelID} // rerender when model switched
-                        onUpdateMapping={(_mapping: FullMapping) => setMapping(_mapping)}
-                        modelLabels={modelLabels}
-                        taskLabels={taskLabels}
-                    />
+                    <div>
+                        <Tag>Model Spec</Tag>
+                        <ArrowRightOutlined />
+                        <Tag>CVAT Spec</Tag>
+                    </div>
                 </div>
+            )}
+            {isDetector && (
+                <LabelsMapperComponent
+                    key={modelID}
+                    onUpdateMapping={(_mapping: FullMapping) => setMapping(_mapping)}
+                    modelLabels={modelLabels}
+                    taskLabels={taskLabels}
+                />
             )}
             {convertMasks2PolygonVisible && (
                 <div className='cvat-detector-runner-convert-masks-to-polygons-wrapper'>
@@ -177,7 +203,7 @@ function DetectorRunner(props: Props): JSX.Element {
                         checked={cleanup}
                         onChange={(checked: boolean): void => setCleanup(checked)}
                     />
-                    <Text>Clean previous annotations</Text>
+                    <Text>Clean previous annotations??</Text>
                 </div>
             )}
             {isDetector && (
@@ -261,6 +287,7 @@ function DetectorRunner(props: Props): JSX.Element {
                                     cleanup,
                                     conv_mask_to_poly: convertMasksToPolygons,
                                     ...(detectorThreshold !== null ? { threshold: detectorThreshold } : {}),
+                                    ...(supportsTextPrompt ? { text_prompt: textPrompt } : {}),
                                 });
                             } else if (model.kind === ModelKind.REID) {
                                 runInference(model, { threshold, max_distance: distance });

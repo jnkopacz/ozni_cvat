@@ -48,7 +48,7 @@ export default function DetailsComponent(props: DetailsComponentProps): JSX.Elem
             <Row justify='space-between' className='cvat-project-description'>
                 <Col>
                     <Text type='secondary'>
-                        {`Project #${project.id} created`}
+                        {`[MOD2] Project #${project.id} created`}
                         {project.owner ? ` by ${project.owner.username}` : null}
                         {` on ${moment(project.createdDate).format('MMMM Do YYYY')}`}
                     </Text>
@@ -78,6 +78,7 @@ export default function DetailsComponent(props: DetailsComponentProps): JSX.Elem
                     project.labels = labels.map((labelData): any => new core.classes.Label(labelData));
                     onUpdateProject(project);
                 }}
+                projectInstance={project}
             />
         </div>
     );

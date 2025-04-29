@@ -8,7 +8,11 @@ import React from 'react';
 import Tabs from 'antd/lib/tabs';
 import Text from 'antd/lib/typography/Text';
 import modal from 'antd/lib/modal';
-import { EditOutlined, BuildOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, BuildOutlined, ExclamationCircleOutlined, PieChartOutlined } from '@ant-design/icons';
+import { connect } from 'react-redux';
+import { CombinedState } from 'reducers';
+import { getCore } from 'cvat-core-wrapper';
+import { collectStatisticsAsync } from 'actions/annotation-actions';
 
 import { SerializedLabel, SerializedAttribute } from 'cvat-core-wrapper';
 import RawViewer from './raw-viewer';
@@ -16,6 +20,7 @@ import ConstructorViewer from './constructor-viewer';
 import ConstructorCreator from './constructor-creator';
 import ConstructorUpdater from './constructor-updater';
 import { idGenerator, LabelOptColor } from './common';
+import ExplorerViewer from './explorer-viewer';
 
 enum ConstructorMode {
     SHOW = 'SHOW',
@@ -23,10 +28,37 @@ enum ConstructorMode {
     UPDATE = 'UPDATE',
 }
 
-interface LabelsEditorProps {
-    labels: SerializedLabel[];
-    onSubmit: (labels: LabelOptColor[]) => void;
+interface OwnProps {
+    labels: any[];
+    onSubmit: (labels: any[]) => void;
+    sessionInstance?: NonNullable<CombinedState['annotation']['job']['instance']>;
+    projectInstance?: any;
 }
+
+interface StateToProps {
+    labels: any[];
+    statistics: NonNullable<CombinedState['annotation']['statistics']['data']>;
+    sessionInstance: NonNullable<CombinedState['annotation']['job']['instance']>;
+}
+
+interface DispatchToProps {
+    collectStatistics: (session: StateToProps['sessionInstance']) => void;
+}
+
+type Props = OwnProps & StateToProps & DispatchToProps;
+
+function mapStateToProps(state: CombinedState, ownProps: OwnProps): StateToProps {
+    return {
+        labels: ownProps.labels,
+        statistics: state.annotation.statistics.data,
+        sessionInstance: ownProps.sessionInstance
+                   ?? state.annotation.job.instance!,
+    };
+}
+
+const mapDispatchToProps: DispatchToProps = {
+    collectStatistics: collectStatisticsAsync,
+};
 
 interface LabelsEditorState {
     constructorMode: ConstructorMode;
@@ -34,10 +66,18 @@ interface LabelsEditorState {
     savedLabels: LabelOptColor[];
     unsavedLabels: LabelOptColor[];
     labelForUpdate: LabelOptColor | null;
+    projectTasks: {
+        taskId: number;
+        numAnnotations: number;
+        task: any;
+    }[];
 }
 
-export default class LabelsEditor extends React.PureComponent<LabelsEditorProps, LabelsEditorState> {
-    public constructor(props: LabelsEditorProps) {
+class LabelsEditorComponent extends React.PureComponent<
+    Props,
+    LabelsEditorState
+> {
+    public constructor(props: Props) {
         super(props);
 
         this.state = {
@@ -46,15 +86,21 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
             constructorMode: ConstructorMode.SHOW,
             creatorType: 'basic',
             labelForUpdate: null,
+            projectTasks: [],
         };
     }
 
     public componentDidMount(): void {
-        // just need performe the same code
-        this.componentDidUpdate((null as any) as LabelsEditorProps);
+        console.log('LabelsEditor mounted with props:', this.props);
+        // just need to perform the same code
+        this.componentDidUpdate((null as any) as Props);
     }
 
-    public componentDidUpdate(prevProps: LabelsEditorProps): void {
+    public componentDidUpdate(prevProps: Props): void {
+        if (prevProps?.statistics !== this.props.statistics) {
+            console.log('Statistics updated:', this.props.statistics);
+        }
+
         function transformLabel(label: SerializedLabel): LabelOptColor {
             return {
                 name: label.name,
@@ -207,12 +253,154 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
         onSubmit(output);
     }
 
+    private handleTabClick = (key: string): void => {
+        // this.setState({ constructorMode: key as ConstructorMode });
+
+        if (key === 'explorer') {
+            const { sessionInstance, projectInstance, collectStatistics } = this.props;
+
+            if (sessionInstance) {
+                collectStatistics(sessionInstance);
+            } else if (projectInstance) {
+                const core = getCore();
+                core.tasks.get({ projectId: projectInstance.id })
+                    .then(async (tasks: any[]) => {
+                        const tasksWithStats = await Promise.all(tasks.map(async (task) => {
+                            try {
+                                const [labelsResponse, annotationsResponse, metaResponse] = await Promise.all([
+                                    fetch(`http://192.168.2.88:8080/api/labels?scheme=json&task_id=${task.id}`),
+                                    fetch(`http://192.168.2.88:8080/api/tasks/${task.id}/annotations?org=`),
+                                    fetch(`http://192.168.2.88:8080/api/tasks/${task.id}/data/meta?org=`)
+                                ]);
+
+                                const [labels, annotations, meta] = await Promise.all([
+                                    labelsResponse.json(),
+                                    annotationsResponse.json(),
+                                    metaResponse.json()
+                                ]);
+
+                                // Group shapes by label_id
+                                const shapesByLabel = annotations.shapes.reduce((acc: any, shape: any) => {
+                                    if (!acc[shape.label_id]) {
+                                        acc[shape.label_id] = {
+                                            rectangle: { shape: 0, track: 0 },
+                                            polygon: { shape: 0, track: 0 },
+                                            polyline: { shape: 0, track: 0 },
+                                            points: { shape: 0, track: 0 },
+                                            ellipse: { shape: 0, track: 0 },
+                                            cuboid: { shape: 0, track: 0 },
+                                            skeleton: { shape: 0, track: 0 },
+                                            mask: { shape: 0 },
+                                            total: 0
+                                        };
+                                    }
+                                    acc[shape.label_id][shape.type].shape++;
+                                    acc[shape.label_id].total++;
+                                    return acc;
+                                }, {});
+
+
+
+                                // Create statistics object for each label
+                                const labelStats = labels.results.reduce((acc: any, label: any) => {
+                                    acc[label.id] = {
+                                        name: label.name,
+                                        color: label.color,
+                                        statistics: shapesByLabel[label.id] || {
+                                            rectangle: { shape: 0, track: 0 },
+                                            polygon: { shape: 0, track: 0 },
+                                            polyline: { shape: 0, track: 0 },
+                                            points: { shape: 0, track: 0 },
+                                            ellipse: { shape: 0, track: 0 },
+                                            cuboid: { shape: 0, track: 0 },
+                                            skeleton: { shape: 0, track: 0 },
+                                            mask: { shape: 0 },
+                                            total: 0
+                                        }
+                                    };
+                                    return acc;
+                                }, {});
+
+                                console.log('annotations', annotations)
+                                console.log('annotations.shapes', annotations.shapes)
+                                return {
+                                    taskId: task.id,
+                                    name: task.name,
+                                    status: task.status,
+                                    totalFrames: meta.size,
+                                    labels: labels.results,
+                                    annotations: annotations,
+                                    statistics: {
+                                        byLabel: labelStats,
+                                        total: {
+                                            rectangle: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'rectangle').length,
+                                                track: 0
+                                            },
+                                            polygon: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'polygon').length,
+                                                track: 0
+                                            },
+                                            polyline: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'polyline').length,
+                                                track: 0
+                                            },
+                                            points: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'points').length,
+                                                track: 0
+                                            },
+                                            ellipse: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'ellipse').length,
+                                                track: 0
+                                            },
+                                            cuboid: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'cuboid').length,
+                                                track: 0
+                                            },
+                                            skeleton: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'skeleton').length,
+                                                track: 0
+                                            },
+                                            mask: {
+                                                shape: annotations.shapes.filter((s: any) => s.type === 'mask').length,
+                                            },
+                                            total: annotations.shapes.length
+                                        }
+                                    }
+                                };
+                            } catch (error) {
+                                console.error(`Error processing task ${task.id}:`, error);
+                                return null;
+                            }
+                        }));
+
+                        const validTasks = tasksWithStats.filter((task) => task !== null);
+                        this.setState({
+                            projectTasks: validTasks
+                        });
+                    })
+                    .catch((error: Error) => {
+                        console.error('Failed to fetch project tasks:', error);
+                    });
+            }
+        }
+    };
+
     public render(): JSX.Element {
-        const { labels } = this.props;
         const {
-            savedLabels, unsavedLabels, constructorMode, labelForUpdate, creatorType,
+            savedLabels,
+            unsavedLabels,
+            constructorMode,
+            labelForUpdate,
+            creatorType,
+            projectTasks,
         } = this.state;
+
+        const { statistics } = this.props;
         const savedAndUnsavedLabels = [...savedLabels, ...unsavedLabels];
+
+        console.log('LabelsEditor render - Current statistics:', statistics);
+        console.log('LabelsEditor render - Labels:', savedAndUnsavedLabels);
 
         let configuratorContent = null;
         if (constructorMode === ConstructorMode.SHOW) {
@@ -240,7 +428,7 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
                 <ConstructorUpdater
                     key='updater'
                     label={labelForUpdate}
-                    labelNames={labels.map((l) => l.name)}
+                    labelNames={this.props.labels.map((l) => l.name)}
                     onUpdate={this.handleUpdate}
                     onCancel={this.handlerCancel}
                 />
@@ -250,7 +438,7 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
                 <ConstructorCreator
                     key='creator'
                     creatorType={creatorType}
-                    labelNames={labels.map((l) => l.name)}
+                    labelNames={this.props.labels.map((l) => l.name)}
                     onCreate={this.handleCreate}
                     onCancel={this.handlerCancel}
                 />
@@ -262,6 +450,7 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
                 defaultActiveKey='configurator'
                 type='card'
                 tabBarStyle={{ marginBottom: '0px' }}
+                onTabClick={this.handleTabClick}
                 items={[{
                     key: 'raw',
                     label: (
@@ -280,8 +469,27 @@ export default class LabelsEditor extends React.PureComponent<LabelsEditorProps,
                         </span>
                     ),
                     children: configuratorContent,
+                }, {
+                    key: 'explorer',
+                    label: (
+                        <span>
+                            <PieChartOutlined />
+                            <Text>Explore</Text>
+                        </span>
+                    ),
+                    children: (
+                        <ExplorerViewer
+                            key='explorer'
+                            labels={savedAndUnsavedLabels}
+                            statistics={statistics || undefined}
+                            projectInstance={this.props.projectInstance}
+                            projectTasks={projectTasks}
+                        />
+                    ),
                 }]}
             />
         );
     }
 }
+
+export default connect(mapStateToProps, mapDispatchToProps)(LabelsEditorComponent);
