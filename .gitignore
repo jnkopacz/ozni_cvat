@@ -8,6 +8,14 @@
 /logs
 /profiles
 
+# Ignores for ozni-combine
+ozni-combine/embeddings/*pkl
+ozni-combine/sample_annotations
+ozni-combine/sample_chips
+ozni-combine/test_output
+ozni-combine/pkls/*
+
+
 # Ignore temporary files
 docker-compose.override.yml
 __pycache__
