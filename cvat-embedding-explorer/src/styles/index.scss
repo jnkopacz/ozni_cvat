@@ -1,0 +1,63 @@
+// src/styles/index.scss
+@use 'variables' as *;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: $background-color-1;
+  color: $text-color;
+}
+
+.cvat-header {
+  background-color: #262626;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  box-shadow: $box-shadow;
+  z-index: 100;
+  position: relative;
+
+  .cvat-logo {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+  }
+}
+
+.cvat-workspace {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.cvat-content {
+  padding: 24px;
+  overflow: auto;
+  flex: 1;
+}
+
+.cvat-card {
+  background-color: $background-color-2;
+  border-radius: 4px;
+  box-shadow: $box-shadow;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.cvat-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.cvat-subtitle {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}

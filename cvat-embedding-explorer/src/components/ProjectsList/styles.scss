@@ -1,0 +1,18 @@
+// src/components/ProjectsList/styles.scss
+@use '../../styles/variables.scss' as *;
+
+.cvat-projects-list-page {
+  .cvat-projects-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  .cvat-projects-list-content {
+    background-color: $background-color-2;
+    border-radius: 4px;
+    box-shadow: $box-shadow;
+    padding: 16px;
+  }
+}

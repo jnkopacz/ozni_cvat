@@ -292,7 +292,8 @@ def process_embedding_job(job_id):
             'embeddings': embeddings,
             'raw_data': all_chips_data,
             'clusters': None,  # Will be populated when clustering is requested
-            'job_id': job_id   # Store the job_id for reference
+            'job_id': job_id,   # Store the job_id for reference
+            'feature_type': job.feature_type
         }
 
         # Save to disk for persistence
@@ -340,15 +341,30 @@ def cluster_embeddings():
     embedding_data = embeddings_cache[project_id]
 
     # Set clustering parameters
+    print(data)
     min_cluster_size = data.get('min_cluster_size', 5)
     min_samples = data.get('min_samples', 5)
     clustering_dims = data.get('clustering_dims', 10)
     reduction_method = data.get('reduction_method', 'pca')
+    feature_type = data.get('feature_type', 'both')
+
+    print(f"Clustering with feature type: {feature_type}")
 
     try:
+        # Get selected embeddings based on feature type
+        print(f"Getting selected embeddings")
+        print(f"Raw data: {len(embedding_data['raw_data'])}")
+        selected_embeddings = embedding_service.get_selected_embeddings(
+            embedding_data['raw_data'],
+            feature_type
+        )
+        print("Printing shape of selected embeddings")
+        print("Num items: ", len(selected_embeddings))
+        print("Num embeddings: ", len(selected_embeddings[0]))
+
         # Perform clustering
         clusters, reducer = clustering_service.cluster_embeddings(
-            embedding_data['embeddings'],
+            selected_embeddings,
             min_cluster_size=min_cluster_size,
             min_samples=min_samples,
             n_components=clustering_dims,
@@ -357,6 +373,7 @@ def cluster_embeddings():
 
         # Update cache with clustering results
         embedding_data['clusters'] = clusters.tolist()
+        embedding_data['feature_type'] = feature_type  # Store the feature type used
 
         # Save updated embeddings with clustering results
         save_embeddings_to_disk(project_id)
@@ -431,7 +448,8 @@ def get_visualization_data():
 
 @app.route('/api/chip/<project_id>/<path:filename>', methods=['GET'])
 def get_chip_image(project_id, filename):
-    """Get a specific chip image"""
+    """Get a specific chip image with improved caching"""
+    print(f"Getting chip image for {filename}")
     # Check if embeddings are in memory, if not try to load from disk
     if project_id not in embeddings_cache:
         if not load_embeddings_from_disk(project_id):
@@ -443,37 +461,46 @@ def get_chip_image(project_id, filename):
     chip_data = None
     for data in embedding_data['raw_data']:
         if data[0] == filename:
+            print(f"Found chip data for {filename} in cache")
             chip_data = data
             break
 
     if not chip_data:
         return jsonify({"error": "Chip not found"}), 404
 
-    # Extract task_id, project_id, frame_id from filename
-    # Format: task{task_id}_job{project_id}_frame{frame_id}_anno{shape.id}.png
+    # Extract task_id, frame_id from filename
     parts = filename.split('_')
     task_id = parts[0].replace('task', '')
     frame_id = parts[2].replace('frame', '')
     anno_id = parts[3].split('.')[0].replace('anno', '')
 
-    # Get the original frame
-    frame_data = cvat_service.get_frame(task_id, int(frame_id))
+    # Try to get chip directly from embedding service cache
+    chip = embedding_service.get_chip(task_id, frame_id, anno_id)
 
-    # Get the annotation
-    annotations = cvat_service.get_annotations(task_id)
-    shape = next((s for s in annotations if str(s['id']) == anno_id), None)
+    if chip is None:
+        # Get frame using embedding service cache
+        frame_data = embedding_service.get_frame(
+            task_id,
+            int(frame_id),
+            lambda: cvat_service.get_frame(task_id, int(frame_id))
+        )
 
-    if not shape:
-        return jsonify({"error": "Annotation not found"}), 404
+        # Get the annotation
+        annotations = cvat_service.get_annotations(task_id)
+        shape = next((s for s in annotations if str(s['id']) == anno_id), None)
 
-    # Extract chip
-    chip = embedding_service.extract_chip(frame_data, shape)
+        if not shape:
+            return jsonify({"error": "Annotation not found"}), 404
 
-    # Convert to bytes
+        # Extract and cache the chip
+        chip = embedding_service.get_chip(task_id, frame_id, anno_id, frame_data, shape)
+        if chip is None:
+            return jsonify({"error": "Failed to extract chip"}), 500
+
+    # Convert to bytes and return
     img_io = io.BytesIO()
     chip.save(img_io, 'PNG')
     img_io.seek(0)
-
     return send_file(img_io, mimetype='image/png')
 
 if __name__ == '__main__':

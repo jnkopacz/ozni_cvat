@@ -1,0 +1,33 @@
+// src/components/EmbeddingJobPanel/styles.scss
+@use '../../styles/variables.scss' as *;
+
+.cvat-embedding-job-panel {
+  .cvat-embedding-job-status {
+    margin-bottom: 24px;
+  }
+  
+  .cvat-embedding-job-tasks {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid $border-color-2;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 16px;
+    
+    .cvat-embedding-job-tasks-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .cvat-embedding-job-tasks-list {
+      .cvat-embedding-job-task-item {
+        padding: 4px 0;
+        
+        &:not(:last-child) {
+          border-bottom: 1px solid $border-color-1;
+        }
+      }
+    }
+  }
+}

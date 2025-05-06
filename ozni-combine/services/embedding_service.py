@@ -5,6 +5,7 @@ from transformers import CLIPProcessor, CLIPModel
 from ollama import Client
 import numpy as np
 from config import CLIP_MODEL, OLLAMA_HOST, CHIP_LIMIT
+from collections import OrderedDict
 
 class EmbeddingService:
     def __init__(self):
@@ -13,6 +14,12 @@ class EmbeddingService:
         self._clip_model = None
         self._clip_processor = None
         self._ollama_client = None
+
+        # Add caches with size limits
+        self.MAX_FRAME_CACHE_SIZE = 2000
+        self.MAX_CHIP_CACHE_SIZE = 20000
+        self._frame_cache = OrderedDict()  # frame_key -> PIL.Image
+        self._chip_cache = OrderedDict()   # chip_key -> PIL.Image
 
     @property
     def clip_model(self):
@@ -32,21 +39,71 @@ class EmbeddingService:
             self._ollama_client = Client(host=OLLAMA_HOST)
         return self._ollama_client
 
+    def _get_frame_cache_key(self, task_id, frame_id):
+        return f"{task_id}_{frame_id}"
+
+    def _get_chip_cache_key(self, task_id, frame_id, shape_id):
+        return f"task{task_id}_job{task_id}_frame{frame_id}_anno{shape_id}.png"
+
+    def get_frame(self, task_id, frame_id, frame_loader):
+        """Get a frame from cache or load it using the provided loader function"""
+        cache_key = self._get_frame_cache_key(task_id, frame_id)
+
+        if cache_key in self._frame_cache:
+            return self._frame_cache[cache_key]
+
+        # Load frame using provided function
+        frame = frame_loader()
+
+        # Add to cache with size limit
+        if len(self._frame_cache) >= self.MAX_FRAME_CACHE_SIZE:
+            self._frame_cache.popitem(last=False)  # Remove oldest item
+        self._frame_cache[cache_key] = frame
+
+        return frame
+
+    def get_chip(self, task_id, frame_id, shape_id, frame=None, shape=None):
+        """Get a chip from cache or extract it from the frame"""
+        cache_key = self._get_chip_cache_key(task_id, frame_id, shape_id)
+
+        if cache_key in self._chip_cache:
+            return self._chip_cache[cache_key]
+
+        if frame is None or shape is None:
+            return None
+
+        chip = self.extract_chip(frame, shape)
+        if chip is None:
+            return None
+
+        # Add to cache with size limit
+        if len(self._chip_cache) >= self.MAX_CHIP_CACHE_SIZE:
+            self._chip_cache.popitem(last=False)  # Remove oldest item
+        self._chip_cache[cache_key] = chip
+
+        return chip
+
     def extract_chip(self, image, shape):
         """Extract a chip from an image based on annotation shape"""
         if shape['type'] == "rectangle":
             x1, y1, x2, y2 = map(int, shape['points'])
-            return image.crop((x1, y1, x2, y2))
+            chip = image.crop((x1, y1, x2, y2))
+            return chip
         return None
 
     def generate_description(self, chip):
         """Generate a description for a chip using LLaVA"""
         chip_bytes = io.BytesIO()
         chip.save(chip_bytes, format='PNG')
-        prompt = "This image was collected from a satellite. Respond with a brief, one-line description of the object. This image shows:"
+        # prompt = "This image was collected from a satellite. Respond with a brief, one-line description of the object. This image shows:"
+        prompt = "Describe the military object centered in this image. This image shows:"
 
+        # model = "llava:13b"
+        # model = "llava:7b"
+        model = 'gemma3:27b'
+        # model = 'gemma3:12b'
         llava_response = self.ollama_client.generate(
-            model="llava:7b",
+            model=model,
             prompt=prompt,
             images=[chip_bytes.getvalue()]
         )
@@ -79,8 +136,8 @@ class EmbeddingService:
         chip_count = 0
         for shape in shapes:
             if shape['type'] == "rectangle":
-                # Extract chip
-                chip = self.extract_chip(image, shape)
+                # Get chip using cache
+                chip = self.get_chip(task_id, frame_id, shape['id'], image, shape)
                 if chip is None:
                     continue
 
@@ -94,7 +151,7 @@ class EmbeddingService:
                 img_embedding = self.generate_image_embedding(chip)
 
                 # Create virtual filename for reference
-                virtual_filename = f"task{task_id}_job{job_id}_frame{frame_id}_anno{shape['id']}.png"
+                virtual_filename = self._get_chip_cache_key(task_id, frame_id, shape['id'])
 
                 all_data.append((
                     virtual_filename,

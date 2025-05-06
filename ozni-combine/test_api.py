@@ -273,7 +273,9 @@ class APITester:
         filename = viz_data['points'][0]['filename']
         print(f"Retrieving chip image: {filename}")
 
+        t=time.time()
         response = requests.get(f"{self.base_url}/api/chip/{self.project_id}/{filename}", stream=True)
+        print(f"Time taken: {time.time() - t} seconds")
 
         if response.status_code == 200:
             # Save the image
