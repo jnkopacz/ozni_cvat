@@ -47,7 +47,8 @@ def embed_chips(image, shapes, task_id, job_id, frame_id):
             # Generate LLaVA description
             chip_bytes = io.BytesIO()
             chip.save(chip_bytes, format='PNG')
-            prompt = "This image was collected from a satellite. Respond with a brief, one-line description of the object. This image shows:"
+            # prompt = "This image was collected from a satellite. Respond with a brief, one-line description of the object. This image shows:"
+            prompt = "Describe the military object in the image. Only focus on the centered object. If it is blurry, use your best judgement. This image shows:"
             llava_response = ollama_client.generate(
                 model="llava:7b",
                 prompt=prompt,
@@ -286,8 +287,12 @@ def main(num_chips, pkl_file=None, min_cluster_size=5, min_samples=5, clustering
         pbar = tqdm(total=num_chips, desc="Processing chips")
         prev_count = 0
         t = time.time()
+        project_id = 2
         tasks = client.tasks.list()
         for task in tasks:
+            print(f"Processing task {task.id}")
+            if task.project_id != project_id:
+                continue
             annotations = task.get_annotations()
 
             for frame_idx in range(len(task.get_frames_info())):

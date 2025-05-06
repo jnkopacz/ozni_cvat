@@ -49,5 +49,4 @@ class ClusteringService:
         n_noise = list(clusters).count(-1)
         print(f"Number of clusters: {n_clusters}")
         print(f"Number of noise points: {n_noise}")
-
-        return clusters, reducer
+        return clusters, reduced_embeddings, reducer

@@ -14,7 +14,9 @@ ozni-combine/sample_annotations
 ozni-combine/sample_chips
 ozni-combine/test_output
 ozni-combine/pkls/*
-
+cvat-embedding-explorer/node_modules
+ozni-combine/examples/*pkl
+ozni-combine/examples/*html
 
 # Ignore temporary files
 docker-compose.override.yml

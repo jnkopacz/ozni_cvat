@@ -1,17 +1,18 @@
 // src/components/EmbeddingJobPanel/EmbeddingJobPanel.tsx
 import React, { useState, useEffect } from 'react';
-import { 
-  Modal, 
-  Form, 
-  Select, 
-  InputNumber, 
-  Button, 
-  Progress, 
-  Alert, 
-  Checkbox, 
-  Space, 
+import {
+  Modal,
+  Form,
+  Select,
+  InputNumber,
+  Button,
+  Progress,
+  Alert,
+  Checkbox,
+  Space,
   Typography,
-  Divider
+  Divider,
+  Input
 } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { api } from '../../api/api';
@@ -28,11 +29,23 @@ interface EmbeddingJobPanelProps {
   onClose: () => void;
 }
 
-const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({ 
-  project, 
-  tasks, 
-  visible, 
-  onClose 
+interface EmbeddingJobRequest {
+  project_id: number;
+  task_ids: number[];
+  feature_type: string;
+  chip_limit: number;
+  recalculate: boolean;
+  visual_model: string;
+  semantic_model: string;
+  text_embedding_model: string;
+  lvlm_prompt: string;
+}
+
+const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
+  project,
+  tasks,
+  visible,
+  onClose
 }) => {
   const [form] = Form.useForm();
   const [jobId, setJobId] = useState<string | null>(null);
@@ -58,7 +71,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
         try {
           const status = await api.getEmbeddingJobStatus(jobId);
           setJobStatus(status);
-          
+
           if (status.status === 'completed') {
             clearInterval(interval);
             setSuccess(true);
@@ -72,7 +85,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
           setError('Failed to get job status');
         }
       }, 2000);
-      
+
       return () => clearInterval(interval);
     }
   }, [jobId]);
@@ -82,19 +95,23 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
       setLoading(true);
       setError(null);
       setSuccess(false);
-      
+
       const values = await form.validateFields();
-      
+
       const jobRequest: EmbeddingJobRequest = {
         project_id: project.id,
         task_ids: selectedTasks,
         feature_type: values.feature_type,
         chip_limit: values.chip_limit,
-        recalculate: values.recalculate
+        recalculate: values.recalculate,
+        visual_model: values.visual_model,
+        semantic_model: values.semantic_model,
+        text_embedding_model: values.text_embedding_model,
+        lvlm_prompt: values.lvlm_prompt
       };
-      
+
       const response = await api.getEmbeddings(jobRequest);
-      
+
       if (response.status === 'available') {
         setSuccess(true);
       } else if (response.status === 'started' && response.job_id) {
@@ -130,8 +147,8 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
   const renderTaskSelection = () => (
     <div className="cvat-embedding-job-tasks">
       <div className="cvat-embedding-job-tasks-header">
-        <Checkbox 
-          checked={selectAll} 
+        <Checkbox
+          checked={selectAll}
           onChange={e => handleSelectAllTasks(e.target.checked)}
         >
           Select All Tasks
@@ -144,7 +161,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
       <div className="cvat-embedding-job-tasks-list">
         {tasks.map(task => (
           <div key={task.id} className="cvat-embedding-job-task-item">
-            <Checkbox 
+            <Checkbox
               checked={selectedTasks.includes(task.id)}
               onChange={e => handleTaskSelection(task.id, e.target.checked)}
             >
@@ -168,7 +185,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
         />
       );
     }
-    
+
     if (error) {
       return (
         <Alert
@@ -180,12 +197,12 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
         />
       );
     }
-    
+
     if (jobStatus) {
       return (
         <div className="cvat-embedding-job-status">
-          <Progress 
-            percent={jobStatus.progress} 
+          <Progress
+            percent={jobStatus.progress}
             status={jobStatus.status === 'failed' ? 'exception' : undefined}
           />
           <Text>
@@ -195,7 +212,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
         </div>
       );
     }
-    
+
     return null;
   };
 
@@ -222,14 +239,18 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
     >
       <div className="cvat-embedding-job-panel">
         {renderJobStatus()}
-        
+
         <Form
           form={form}
           layout="vertical"
           initialValues={{
             feature_type: 'both',
             chip_limit: 50,
-            recalculate: false
+            recalculate: false,
+            visual_model: 'clip',
+            semantic_model: 'gemma3:27b',
+            text_embedding_model: 'all-minilm',
+            lvlm_prompt: 'Describe the military object centered in this image. This image shows:'
           }}
         >
           <Form.Item
@@ -243,7 +264,49 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
               <Option value="both">Both Visual and Semantic</Option>
             </Select>
           </Form.Item>
-          
+
+          <Form.Item
+            name="visual_model"
+            label="Visual Embedding Model"
+            tooltip="Model to use for visual feature extraction"
+          >
+            <Select>
+              <Option value="clip">CLIP</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="semantic_model"
+            label="Large Vision Language Model"
+            tooltip="Model to use for generating image descriptions"
+          >
+            <Select>
+              <Option value="llava:7b">LLaVA 7B</Option>
+              <Option value="llava:13b">LLaVA 13B</Option>
+              <Option value="gemma3:12b">Gemma 12B</Option>
+              <Option value="gemma3:27b">Gemma 27B</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="text_embedding_model"
+            label="Description Text Embedding Model"
+            tooltip="Model to use for embedding the generated descriptions"
+          >
+            <Select>
+              <Option value="nomic-embed-text">Nomic Embed Text</Option>
+              <Option value="all-minilm">All-MiniLM</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="lvlm_prompt"
+            label="LVLM Prompt"
+            tooltip="Prompt to guide the vision language model's description"
+          >
+            <Input.TextArea rows={2} />
+          </Form.Item>
+
           <Form.Item
             name="chip_limit"
             label="Chip Limit"
@@ -251,7 +314,7 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
           >
             <InputNumber min={1} max={1000} style={{ width: '100%' }} />
           </Form.Item>
-          
+
           <Form.Item
             name="recalculate"
             valuePropName="checked"
@@ -261,9 +324,9 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
             </Checkbox>
           </Form.Item>
         </Form>
-        
+
         <Divider />
-        
+
         <Title level={5}>Select Tasks</Title>
         {renderTaskSelection()}
       </div>

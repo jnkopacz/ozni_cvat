@@ -4,15 +4,14 @@ import torch
 from transformers import CLIPProcessor, CLIPModel
 from ollama import Client
 import numpy as np
-from config import CLIP_MODEL, OLLAMA_HOST, CHIP_LIMIT
+from config import OLLAMA_HOST, CHIP_LIMIT, VISUAL_MODELS, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEFAULT_TEXT_EMBEDDING_MODEL, DEFAULT_LVLM_PROMPT
 from collections import OrderedDict
-
+import time
 class EmbeddingService:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # Initialize models lazily to save resources
-        self._clip_model = None
-        self._clip_processor = None
+        self._models = {}
         self._ollama_client = None
 
         # Add caches with size limits
@@ -21,17 +20,14 @@ class EmbeddingService:
         self._frame_cache = OrderedDict()  # frame_key -> PIL.Image
         self._chip_cache = OrderedDict()   # chip_key -> PIL.Image
 
-    @property
-    def clip_model(self):
-        if self._clip_model is None:
-            self._clip_model = CLIPModel.from_pretrained(CLIP_MODEL).to(self.device)
-        return self._clip_model
-
-    @property
-    def clip_processor(self):
-        if self._clip_processor is None:
-            self._clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL)
-        return self._clip_processor
+    def _get_visual_model(self, model_name):
+        if model_name not in self._models:
+            model_path = VISUAL_MODELS[model_name]
+            self._models[model_name] = {
+                'model': CLIPModel.from_pretrained(model_path).to(self.device),
+                'processor': CLIPProcessor.from_pretrained(model_path)
+            }
+        return self._models[model_name]
 
     @property
     def ollama_client(self):
@@ -91,66 +87,65 @@ class EmbeddingService:
             return chip
         return None
 
-    def generate_description(self, chip):
-        """Generate a description for a chip using LLaVA"""
+    def generate_description(self, chip, semantic_model=DEFAULT_SEMANTIC_MODEL, lvlm_prompt=DEFAULT_LVLM_PROMPT):
+        """Generate a description for a chip using specified LLM"""
         chip_bytes = io.BytesIO()
         chip.save(chip_bytes, format='PNG')
-        # prompt = "This image was collected from a satellite. Respond with a brief, one-line description of the object. This image shows:"
-        prompt = "Describe the military object centered in this image. This image shows:"
-
-        # model = "llava:13b"
-        # model = "llava:7b"
-        model = 'gemma3:27b'
-        # model = 'gemma3:12b'
+        print(f"Generating description for chip using {semantic_model} and prompt: {lvlm_prompt}")
+        t = time.time()
         llava_response = self.ollama_client.generate(
-            model=model,
-            prompt=prompt,
+            model=semantic_model,
+            prompt=lvlm_prompt,
             images=[chip_bytes.getvalue()]
         )
+        print(f"LVLM response time: {time.time() - t} seconds")
 
         return llava_response.response
 
-    def generate_text_embedding(self, text):
-        """Generate text embedding using Ollama"""
+    def generate_text_embedding(self, text, model=DEFAULT_TEXT_EMBEDDING_MODEL):
+        """Generate text embedding using specified model"""
+        print(f"Generating text embedding using {model}")
+        t = time.time()
         text_response = self.ollama_client.embeddings(
-            model='all-minilm',
+            model=model,
             prompt=text
         )
+        print(f"Text embedding response time: {time.time() - t} seconds")
         return text_response['embedding']
 
-    def generate_image_embedding(self, chip):
-        """Generate image embedding using CLIP"""
-        inputs = self.clip_processor(images=chip, return_tensors="pt", padding=True).to(self.device)
+    def generate_image_embedding(self, chip, model_name=DEFAULT_VISUAL_MODEL):
+        """Generate image embedding using specified model"""
+        model_data = self._get_visual_model(model_name)
+        t = time.time()
+        inputs = model_data['processor'](images=chip, return_tensors="pt", padding=True).to(self.device)
 
         with torch.no_grad():
-            image_features = self.clip_model.get_image_features(**inputs)
+            image_features = model_data['model'].get_image_features(**inputs)
             img_embedding = image_features.cpu().numpy()[0]
             img_embedding = img_embedding / np.linalg.norm(img_embedding)
 
+        print(f"Image embedding response time: {time.time() - t} seconds, with device: {self.device}")
         return img_embedding
 
-    def embed_chips(self, image, shapes, task_id, job_id, frame_id):
+    def embed_chips(self, image, shapes, task_id, job_id, frame_id,
+                   visual_model=DEFAULT_VISUAL_MODEL,
+                   semantic_model=DEFAULT_SEMANTIC_MODEL,
+                   text_embedding_model=DEFAULT_TEXT_EMBEDDING_MODEL,
+                   lvlm_prompt=DEFAULT_LVLM_PROMPT):
         """Extract chips, generate descriptions and embeddings"""
-        all_data = []  # List to store (filename, description, image_embedding, text_embedding)
-
+        all_data = []
         chip_count = 0
+
         for shape in shapes:
             if shape['type'] == "rectangle":
-                # Get chip using cache
                 chip = self.get_chip(task_id, frame_id, shape['id'], image, shape)
                 if chip is None:
                     continue
 
-                # Generate description
-                description = self.generate_description(chip)
+                description = self.generate_description(chip, semantic_model, lvlm_prompt)
+                text_embedding = self.generate_text_embedding(description, text_embedding_model)
+                img_embedding = self.generate_image_embedding(chip, visual_model)
 
-                # Generate text embedding
-                text_embedding = self.generate_text_embedding(description)
-
-                # Generate image embedding
-                img_embedding = self.generate_image_embedding(chip)
-
-                # Create virtual filename for reference
                 virtual_filename = self._get_chip_cache_key(task_id, frame_id, shape['id'])
 
                 all_data.append((

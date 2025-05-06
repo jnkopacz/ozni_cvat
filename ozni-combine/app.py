@@ -9,11 +9,13 @@ import io
 import threading
 import json
 import re
+import traceback
 
 from services.cvat_service import CVATService
 from services.embedding_service import EmbeddingService
 from services.clustering_service import ClusteringService
 from models.data_models import JobStatus, EmbeddingJob
+from config import CHIP_LIMIT, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEFAULT_TEXT_EMBEDDING_MODEL, DEFAULT_LVLM_PROMPT
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -135,7 +137,6 @@ def check_embeddings():
 
 @app.route('/api/embeddings/get', methods=['POST'])
 def get_embeddings():
-    """Get embeddings for a project - checks if they exist, loads them, or starts a new job"""
     data = request.json
 
     if not data or 'project_id' not in data:
@@ -146,7 +147,6 @@ def get_embeddings():
 
     # If not recalculating, check if embeddings are already available
     if not recalculate:
-        # Check if embeddings are in memory
         if project_id in embeddings_cache:
             return jsonify({
                 "status": "available",
@@ -154,10 +154,8 @@ def get_embeddings():
                 "project_id": project_id
             })
 
-        # Check if embeddings are on disk
         file_path = get_embedding_file_path(project_id)
         if os.path.exists(file_path):
-            # Load embeddings from disk
             success = load_embeddings_from_disk(project_id)
             if success:
                 return jsonify({
@@ -166,15 +164,8 @@ def get_embeddings():
                     "project_id": project_id
                 })
 
-    # If we get here, we need to start a new job
-    # Check if we have the required parameters
-    if 'task_ids' not in data:
-        return jsonify({"error": "task_ids are required to start a new embedding job"}), 400
-
-    # Create a new job
+    # Create new job with all parameters
     job_id = str(uuid.uuid4())
-
-    # Set up job parameters
     job = JobStatus(
         id=job_id,
         project_id=project_id,
@@ -183,12 +174,17 @@ def get_embeddings():
         task_ids=data['task_ids'],
         filter_criteria=data.get('filter_criteria', {}),
         feature_type=data.get('feature_type', 'both'),
-        chip_limit=data.get('chip_limit', 100)
+        chip_limit=data.get('chip_limit', CHIP_LIMIT),
+        visual_model=data.get('visual_model', DEFAULT_VISUAL_MODEL),
+        semantic_model=data.get('semantic_model', DEFAULT_SEMANTIC_MODEL),
+        text_embedding_model=data.get('text_embedding_model', DEFAULT_TEXT_EMBEDDING_MODEL),
+        lvlm_prompt=data.get('lvlm_prompt', DEFAULT_LVLM_PROMPT)
     )
+
+    print(f"Starting job {job_id} with parameters: {job.__dict__}")
 
     jobs[job_id] = job
 
-    # Start processing in a background thread
     thread = threading.Thread(
         target=process_embedding_job,
         args=(job_id,)
@@ -257,13 +253,17 @@ def process_embedding_job(job_id):
                 # Get frame image
                 frame_data = cvat_service.get_frame(task_id, frame_idx)
 
-                # Process chips and get embeddings
+                # Process chips and get embeddings - now passing all model parameters
                 chips_data = embedding_service.embed_chips(
                     frame_data,
                     frame_shapes,
                     task_id,
-                    project_id,  # Using project_id instead of job_id
-                    frame_idx
+                    project_id,
+                    frame_idx,
+                    visual_model=job.visual_model,
+                    semantic_model=job.semantic_model,
+                    text_embedding_model=job.text_embedding_model,
+                    lvlm_prompt=job.lvlm_prompt
                 )
 
                 all_chips_data.extend(chips_data)
@@ -341,29 +341,21 @@ def cluster_embeddings():
     embedding_data = embeddings_cache[project_id]
 
     # Set clustering parameters
-    print(data)
     min_cluster_size = data.get('min_cluster_size', 5)
     min_samples = data.get('min_samples', 5)
     clustering_dims = data.get('clustering_dims', 10)
     reduction_method = data.get('reduction_method', 'pca')
     feature_type = data.get('feature_type', 'both')
 
-    print(f"Clustering with feature type: {feature_type}")
-
     try:
         # Get selected embeddings based on feature type
-        print(f"Getting selected embeddings")
-        print(f"Raw data: {len(embedding_data['raw_data'])}")
         selected_embeddings = embedding_service.get_selected_embeddings(
             embedding_data['raw_data'],
             feature_type
         )
-        print("Printing shape of selected embeddings")
-        print("Num items: ", len(selected_embeddings))
-        print("Num embeddings: ", len(selected_embeddings[0]))
 
-        # Perform clustering
-        clusters, reducer = clustering_service.cluster_embeddings(
+        # Perform clustering and get reduced embeddings
+        clusters, reduced_embeddings, reducer = clustering_service.cluster_embeddings(
             selected_embeddings,
             min_cluster_size=min_cluster_size,
             min_samples=min_samples,
@@ -371,9 +363,12 @@ def cluster_embeddings():
             reduction_method=reduction_method
         )
 
-        # Update cache with clustering results
+        # Update cache with clustering results and reduced embeddings
         embedding_data['clusters'] = clusters.tolist()
-        embedding_data['feature_type'] = feature_type  # Store the feature type used
+        embedding_data['feature_type'] = feature_type
+        embedding_data['reduced_embeddings'] = reduced_embeddings
+        embedding_data['reducer'] = reducer
+        embedding_data['selected_embeddings'] = selected_embeddings
 
         # Save updated embeddings with clustering results
         save_embeddings_to_disk(project_id)
@@ -390,6 +385,9 @@ def cluster_embeddings():
         })
 
     except Exception as e:
+        print(f"Error clustering embeddings: {e}")
+        #stack trace
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/visualization', methods=['POST'])
@@ -413,14 +411,36 @@ def get_visualization_data():
     # Set visualization parameters
     display_dims = data.get('display_dims', 3)
     reduction_method = data.get('reduction_method', 'pca')
+    feature_type = embedding_data.get('feature_type', 'both')
 
     try:
-        # Generate visualization data
-        reduced_embeddings, reducer = clustering_service.reduce_dimensions(
-            embedding_data['embeddings'],
-            n_components=display_dims,
-            method=reduction_method
-        )
+        # Use the reduced embeddings from clustering if they exist and match the parameters
+        if ('reduced_embeddings' in embedding_data and
+            embedding_data.get('feature_type') == feature_type):
+
+            reduced_embeddings = embedding_data['reduced_embeddings']
+
+            # If we need fewer dimensions than we have, use the existing reducer
+            if display_dims <= reduced_embeddings.shape[1]:
+                reduced_embeddings = reduced_embeddings[:, :display_dims]
+            else:
+                # If we need more dimensions, we need to re-reduce from the selected embeddings
+                reduced_embeddings, _ = clustering_service.reduce_dimensions(
+                    embedding_data['selected_embeddings'],
+                    n_components=display_dims,
+                    method=reduction_method
+                )
+        else:
+            # If we don't have reduced embeddings or parameters don't match, compute new ones
+            selected_embeddings = embedding_service.get_selected_embeddings(
+                embedding_data['raw_data'],
+                feature_type
+            )
+            reduced_embeddings, _ = clustering_service.reduce_dimensions(
+                selected_embeddings,
+                n_components=display_dims,
+                method=reduction_method
+            )
 
         # Prepare response data
         viz_data = []
@@ -440,6 +460,7 @@ def get_visualization_data():
             "project_id": project_id,
             "dimensions": display_dims,
             "reduction_method": reduction_method,
+            "feature_type": feature_type,
             "points": viz_data
         })
 
