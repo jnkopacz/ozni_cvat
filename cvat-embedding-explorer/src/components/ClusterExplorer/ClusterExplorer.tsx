@@ -404,7 +404,7 @@ const ClusterExplorer: React.FC = () => {
               <Title level={4}>Clustering Settings</Title>
               <Form
                 form={form}
-                layout="inline"
+                layout="vertical"
                 initialValues={{
                   min_cluster_size: 5,
                   min_samples: 5,
@@ -422,6 +422,7 @@ const ClusterExplorer: React.FC = () => {
                 >
                   <InputNumber min={2} max={100} />
                 </Form.Item>
+
                 <Form.Item
                   name="min_samples"
                   label="Min Samples"
@@ -429,6 +430,7 @@ const ClusterExplorer: React.FC = () => {
                 >
                   <InputNumber min={1} max={100} />
                 </Form.Item>
+
                 <Form.Item
                   name="clustering_dims"
                   label="Clustering Dimensions"
@@ -436,38 +438,42 @@ const ClusterExplorer: React.FC = () => {
                 >
                   <InputNumber min={2} max={50} />
                 </Form.Item>
+
                 <Form.Item
                   name="reduction_method"
                   label="Reduction Method"
                   rules={[{ required: true, message: 'Required' }]}
                 >
-                  <Select style={{ width: 120 }}>
+                  <Select>
                     <Option value="pca">PCA</Option>
                     <Option value="umap">UMAP</Option>
                   </Select>
                 </Form.Item>
+
                 <Form.Item
                   name="feature_type"
                   label="Feature Type"
                   rules={[{ required: true, message: 'Required' }]}
                 >
-                  <Select style={{ width: 120 }}>
+                  <Select>
                     <Option value="image">Visual Features</Option>
                     <Option value="text">Contextual Features</Option>
                     <Option value="both">Both</Option>
                   </Select>
                 </Form.Item>
+
                 <Form.Item
                   name="display_dims"
                   label="Display Dimensions"
                   rules={[{ required: true, message: 'Required' }]}
                 >
-                  <Select style={{ width: 120 }}>
+                  <Select>
                     <Option value={2}>2D</Option>
                     <Option value={3}>3D</Option>
                   </Select>
                 </Form.Item>
-                <Form.Item>
+
+                <Form.Item className="form-actions">
                   <Button
                     type="primary"
                     htmlType="submit"

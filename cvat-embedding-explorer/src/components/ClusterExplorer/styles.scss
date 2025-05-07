@@ -45,9 +45,30 @@
 
       .ant-form {
         margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+
+        .ant-form-item {
+          margin: 0;
+          width: 100%;
+
+          .ant-form-item-label {
+            padding-bottom: 4px;
+          }
+
+          .ant-input-number,
+          .ant-select {
+            width: 100%;
+          }
+        }
+
+        .form-actions {
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-start;
+        }
       }
-
-
     }
 
     .cvat-cluster-explorer-visualization {
