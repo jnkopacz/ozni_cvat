@@ -11,9 +11,13 @@ RUN pip install cvat-sdk==2.34 ollama scikit-learn matplotlib plotly pandas hdbs
 RUN pip install torch transformers
 RUN pip install flask==2.3.3 flask-cors==4.0.0 cvat-sdk==2.5.0 Pillow==10.0.0
 RUN pip install tqdm
+RUN pip install openai
 
 
 RUN apt-get install -y build-essential
+
+#For the webapp
+RUN apt-get install -y nodejs npm
 
 COPY . /app
 

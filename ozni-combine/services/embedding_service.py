@@ -7,12 +7,17 @@ import numpy as np
 from config import OLLAMA_HOST, CHIP_LIMIT, VISUAL_MODELS, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEFAULT_TEXT_EMBEDDING_MODEL, DEFAULT_LVLM_PROMPT
 from collections import OrderedDict
 import time
+import os
+from openai import OpenAI
+import base64
+
 class EmbeddingService:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # Initialize models lazily to save resources
         self._models = {}
         self._ollama_client = None
+        self._openai_client = None
 
         # Add caches with size limits
         self.MAX_FRAME_CACHE_SIZE = 2000
@@ -34,6 +39,15 @@ class EmbeddingService:
         if self._ollama_client is None:
             self._ollama_client = Client(host=OLLAMA_HOST)
         return self._ollama_client
+
+    @property
+    def openai_client(self):
+        if self._openai_client is None:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required for GPT models")
+            self._openai_client = OpenAI(api_key=api_key)
+        return self._openai_client
 
     def _get_frame_cache_key(self, task_id, frame_id):
         return f"{task_id}_{frame_id}"
@@ -58,7 +72,7 @@ class EmbeddingService:
 
         return frame
 
-    def get_chip(self, task_id, frame_id, shape_id, frame=None, shape=None):
+    def get_chip(self, task_id, frame_id, shape_id, frame=None, shape=None, over_clip=1.0):
         """Get a chip from cache or extract it from the frame"""
         cache_key = self._get_chip_cache_key(task_id, frame_id, shape_id)
 
@@ -68,9 +82,18 @@ class EmbeddingService:
         if frame is None or shape is None:
             return None
 
-        chip = self.extract_chip(frame, shape)
+        chip = self.extract_chip(frame, shape, over_clip=over_clip)
         if chip is None:
             return None
+
+        inflation_tries = 5
+        over_clip = 1.0
+        while min(chip.size) < 140 and inflation_tries > 0:
+            print(f"Chip dimensions: {chip.size}, trying again with over_clip {over_clip}")
+            chip = self.extract_chip(frame, shape, over_clip=over_clip)
+            over_clip += 1
+            inflation_tries -= 1
+        print(f"Chip dimensions: {chip.size}")
 
         # Add to cache with size limit
         if len(self._chip_cache) >= self.MAX_CHIP_CACHE_SIZE:
@@ -79,11 +102,34 @@ class EmbeddingService:
 
         return chip
 
-    def extract_chip(self, image, shape):
-        """Extract a chip from an image based on annotation shape"""
+    def extract_chip(self, image, shape, over_clip=1.0):
+        """Extract a chip from an image based on annotation shape
+
+        Args:
+            image: PIL Image
+            shape: Annotation shape dictionary
+            over_clip: Float multiplier for chip size (e.g. 2.0 = 2x larger in all dimensions)
+        """
         if shape['type'] == "rectangle":
             x1, y1, x2, y2 = map(int, shape['points'])
-            chip = image.crop((x1, y1, x2, y2))
+
+            # Calculate center point and dimensions
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            width = x2 - x1
+            height = y2 - y1
+
+            # Calculate new dimensions with over_clip
+            new_width = width * over_clip
+            new_height = height * over_clip
+
+            # Calculate new coordinates, ensuring they stay within image bounds
+            new_x1 = max(0, int(center_x - new_width / 2))
+            new_y1 = max(0, int(center_y - new_height / 2))
+            new_x2 = min(image.width, int(center_x + new_width / 2))
+            new_y2 = min(image.height, int(center_y + new_height / 2))
+
+            chip = image.crop((new_x1, new_y1, new_x2, new_y2))
             return chip
         return None
 
@@ -93,14 +139,37 @@ class EmbeddingService:
         chip.save(chip_bytes, format='PNG')
         print(f"Generating description for chip using {semantic_model} and prompt: {lvlm_prompt}")
         t = time.time()
-        llava_response = self.ollama_client.generate(
-            model=semantic_model,
-            prompt=lvlm_prompt,
-            images=[chip_bytes.getvalue()]
-        )
-        print(f"LVLM response time: {time.time() - t} seconds")
 
-        return llava_response.response
+        if semantic_model.startswith('gpt-') or semantic_model.startswith('o4-'):
+            # Use OpenAI API for GPT models
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model=semantic_model,
+                    messages=[
+                        {"role": "user", "content": [
+                            {"type": "text", "text": lvlm_prompt},
+                            {"type": "image_url",
+                             "image_url": {"url": f"data:image/png;base64,{base64.b64encode(chip_bytes.getvalue()).decode()}"}}
+                        ]}
+                    ],
+                    max_tokens=300
+                )
+                description = response.choices[0].message.content
+            except Exception as e:
+                print(f"Error using OpenAI API: {e}")
+                return "Error generating description with OpenAI"
+        else:
+            # Use Ollama for other models
+            llava_response = self.ollama_client.generate(
+                model=semantic_model,
+                prompt=lvlm_prompt,
+                images=[chip_bytes.getvalue()]
+            )
+            description = llava_response.response
+        print(f"Description: {description}")
+        #Save chip to file
+        print(f"LVLM response time: {time.time() - t} seconds")
+        return description
 
     def generate_text_embedding(self, text, model=DEFAULT_TEXT_EMBEDDING_MODEL):
         """Generate text embedding using specified model"""
@@ -138,11 +207,17 @@ class EmbeddingService:
 
         for shape in shapes:
             if shape['type'] == "rectangle":
-                chip = self.get_chip(task_id, frame_id, shape['id'], image, shape)
+                chip = self.get_chip(task_id, frame_id, shape['id'], image, shape, over_clip=1.0)
+                #print dimensions of chip
+
                 if chip is None:
                     continue
 
+
                 description = self.generate_description(chip, semantic_model, lvlm_prompt)
+                #Save chip to file
+                print(f"Saving chip to file chip_{task_id}_{frame_id}_{shape['id']}.png")
+                chip.save(f"chip_{task_id}_{frame_id}_{shape['id']}.png")
                 text_embedding = self.generate_text_embedding(description, text_embedding_model)
                 img_embedding = self.generate_image_embedding(chip, visual_model)
 

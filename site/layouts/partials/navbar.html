@@ -14,6 +14,9 @@
         {{ with resources.Get "icons/logo.svg" -}}
           {{ ( . | minify).Content | safeHTML -}}
         {{ end -}}
+        {{ with resources.Get "icons/logo_ozni_white.png" -}}
+          <img src="{{ .RelPermalink }}" alt="OZNI Logo" style="height: 32px; margin-left: 10px;">
+        {{ end -}}
       {{ end -}}
     </span>
     {{- /**/ -}}

@@ -110,7 +110,7 @@ function analyzeClassImbalance(labelTotalCounts: Record<string, number>): Datase
     Object.entries(labelTotalCounts).forEach(([label, count]) => {
         //If this class is 10x less than the max class count, it is an imbalance
 
-        if (count < max_class_count / 10) {
+        if (count < max_class_count / 20) {
             alerts.push({
                 type: 'warning',
                 message: 'Class Imbalance Detected',
@@ -134,7 +134,7 @@ function analyzeClassCounts(labelTotalCounts: Record<string, number>): DatasetAl
     Object.entries(labelTotalCounts).forEach(([label, count]) => {
         console.log('Label:', label);
         console.log('Count:', count);
-        if (count < 1000) {
+        if (count < 250) {
                 alerts.push({
                     type: 'error',
                     message: 'Insufficient Data',
@@ -201,10 +201,8 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
 
     // Calculate total annotations across all tasks
     const totalAnnotations = projectTasks?.reduce((sum, task) => {
-        const labelStats = Object.values(task.statistics.byLabel);
-        const taskTotal = labelStats.reduce((taskSum, labelStat) =>
-            taskSum + (labelStat.statistics.total || 0), 0);
-        return sum + taskTotal;
+        // Directly sum the number of shapes from each task's annotations
+        return sum + (task.annotations?.shapes?.length || 0);
     }, 0) || 0;
 
     const totalTasks = projectTasks?.length || 0;
@@ -221,7 +219,9 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
 
 
     projectTasks?.forEach((task) => {
+        console.log('Task:', task);
         Object.values(task.statistics.byLabel).forEach((labelStat) => {
+            console.log('Label Stat:', labelStat);
             if (labelTotalCounts.hasOwnProperty(labelStat.name)) {
                 labelTotalCounts[labelStat.name] += labelStat.statistics.total;
             }

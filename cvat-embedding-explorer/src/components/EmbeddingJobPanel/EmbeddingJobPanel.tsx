@@ -285,6 +285,9 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
               <Option value="llava:13b">LLaVA 13B</Option>
               <Option value="gemma3:12b">Gemma 12B</Option>
               <Option value="gemma3:27b">Gemma 27B</Option>
+              <Option value="gpt-4o">OpenAI GPT 4o (Requires API Key)</Option>
+              <Option value="o4-mini">OpenAI GPT o4-mini (Requires API Key)</Option>
+              <Option value="gpt-4.1-mini">OpenAI GPT 4.1-mini (Requires API Key)</Option>
             </Select>
           </Form.Item>
 
@@ -310,9 +313,9 @@ const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
           <Form.Item
             name="chip_limit"
             label="Chip Limit"
-            tooltip="Maximum number of chips to process per task"
+            tooltip="Maximum number of chips to process per task. -1 for all chips"
           >
-            <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+            <InputNumber min={-1} max={20000} style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item

@@ -267,17 +267,34 @@ class LabelsEditorComponent extends React.PureComponent<
                     .then(async (tasks: any[]) => {
                         const tasksWithStats = await Promise.all(tasks.map(async (task) => {
                             try {
-                                const [labelsResponse, annotationsResponse, metaResponse] = await Promise.all([
-                                    fetch(`http://192.168.2.88:8080/api/labels?scheme=json&task_id=${task.id}`),
+                                // Helper function to fetch all pages of data
+                                const fetchAllPages = async (url: string, accumulatedResults: any[] = []): Promise<any[]> => {
+                                    const response = await fetch(url);
+                                    if (!response.ok) {
+                                        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+                                    }
+                                    const data = await response.json();
+                                    const newResults = accumulatedResults.concat(data.results || []);
+                                    if (data.next) {
+                                        return fetchAllPages(data.next, newResults);
+                                    }
+                                    return newResults;
+                                };
+
+                                const [labelsResults, annotationsResponse, metaResponse] = await Promise.all([
+                                    fetchAllPages(`http://192.168.2.88:8080/api/labels?scheme=json&task_id=${task.id}`),
                                     fetch(`http://192.168.2.88:8080/api/tasks/${task.id}/annotations?org=`),
-                                    fetch(`http://192.168.2.88:8080/api/tasks/${task.id}/data/meta?org=`)
+                                    fetch(`http://192.168.2.88:8080/api/tasks/${task.id}/data/meta?org=`),
                                 ]);
 
-                                const [labels, annotations, meta] = await Promise.all([
-                                    labelsResponse.json(),
+                                // The labels are now an array of results from all pages
+                                const labels = { results: labelsResults };
+                                const [annotations, meta] = await Promise.all([
                                     annotationsResponse.json(),
-                                    metaResponse.json()
+                                    metaResponse.json(),
                                 ]);
+
+                                console.log('labels ', task.id, labels);
 
                                 // Group shapes by label_id
                                 const shapesByLabel = annotations.shapes.reduce((acc: any, shape: any) => {
@@ -298,8 +315,6 @@ class LabelsEditorComponent extends React.PureComponent<
                                     acc[shape.label_id].total++;
                                     return acc;
                                 }, {});
-
-
 
                                 // Create statistics object for each label
                                 const labelStats = labels.results.reduce((acc: any, label: any) => {
@@ -373,8 +388,9 @@ class LabelsEditorComponent extends React.PureComponent<
                                 return null;
                             }
                         }));
-
+                        console.log('tasksWithStats', tasksWithStats)
                         const validTasks = tasksWithStats.filter((task) => task !== null);
+                        console.log('validTasks', validTasks)
                         this.setState({
                             projectTasks: validTasks
                         });
