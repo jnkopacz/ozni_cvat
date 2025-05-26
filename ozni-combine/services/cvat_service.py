@@ -83,7 +83,6 @@ class CVATService:
             task_id = int(task_id)
             task = client.tasks.retrieve(task_id)
             annotations = task.get_annotations()
-
             # Convert to a more JSON-friendly format
             shapes = []
             for shape in annotations.shapes:
@@ -125,3 +124,25 @@ class CVATService:
             task = client.tasks.retrieve(task_id)
             frame_data = task.get_frame(frame_id)
             return Image.open(frame_data)
+
+    def get_project_labels(self, project_id):
+        """Get all labels for a project"""
+        with self.get_client() as client:
+            project_id = int(project_id)
+            project = client.projects.retrieve(project_id)
+            labels = project.get_labels()
+            return [
+                {
+                    'id': label.id,
+                    'name': label.name,
+                    'attributes': [
+                        {
+                            'name': attr.name,
+                            'values': attr.values,
+                            'input_type': attr.input_type
+                        }
+                        for attr in label.attributes
+                    ]
+                }
+                for label in labels
+            ]

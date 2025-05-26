@@ -21,6 +21,7 @@ class APITester:
         if response.status_code == 200:
             projects = response.json()
             print(f"Found {len(projects)} projects")
+            print(projects)
             if projects:
                 self.project_id = projects[0]['id']
                 self.project_id = 1

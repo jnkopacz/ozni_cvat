@@ -16,6 +16,7 @@ from services.embedding_service import EmbeddingService
 from services.clustering_service import ClusteringService
 from models.data_models import JobStatus, EmbeddingJob
 from config import CHIP_LIMIT, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEFAULT_TEXT_EMBEDDING_MODEL, DEFAULT_LVLM_PROMPT
+from services.label_hierarchy_service import LabelHierarchyService
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -54,6 +55,7 @@ embeddings_cache = {}  # project_id -> embedding data
 cvat_service = CVATService()
 embedding_service = EmbeddingService()
 clustering_service = ClusteringService()
+label_hierarchy_service = LabelHierarchyService(cvat_service, embedding_service)
 
 def get_embedding_file_path(project_id):
     """Get the file path for storing embeddings for a project"""
@@ -523,6 +525,18 @@ def get_chip_image(project_id, filename):
     chip.save(img_io, 'PNG')
     img_io.seek(0)
     return send_file(img_io, mimetype='image/png')
+
+@app.route('/api/labels/hierarchy/<project_id>', methods=['GET'])
+def get_label_hierarchy(project_id):
+    """Get hierarchical structure of labels for a project"""
+    try:
+        project_id = int(project_id)
+        force_recalculate = request.args.get('force_recalculate', '').lower() == 'true'
+        print(f"Getting label hierarchy for project {project_id} (force_recalculate={force_recalculate})")
+        hierarchy = label_hierarchy_service.get_project_hierarchy(project_id, force_recalculate=force_recalculate)
+        return jsonify(hierarchy)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
