@@ -268,3 +268,14 @@ textarea.ant-input.cvat-raw-labels-viewer {
         }
     }
 }
+
+.cvat-combine-viewer {
+    padding: 15px;
+    background: #1e1e1e;
+    overflow: auto;
+    height: 100%;
+
+    .js-plotly-plot {
+        margin: 0 auto;
+    }
+}

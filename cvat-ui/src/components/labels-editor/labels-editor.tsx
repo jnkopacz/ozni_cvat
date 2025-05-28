@@ -8,7 +8,7 @@ import React from 'react';
 import Tabs from 'antd/lib/tabs';
 import Text from 'antd/lib/typography/Text';
 import modal from 'antd/lib/modal';
-import { EditOutlined, BuildOutlined, ExclamationCircleOutlined, PieChartOutlined } from '@ant-design/icons';
+import { EditOutlined, BuildOutlined, ExclamationCircleOutlined, PieChartOutlined, ClusterOutlined } from '@ant-design/icons';
 import { connect } from 'react-redux';
 import { CombinedState } from 'reducers';
 import { getCore } from 'cvat-core-wrapper';
@@ -21,6 +21,7 @@ import ConstructorCreator from './constructor-creator';
 import ConstructorUpdater from './constructor-updater';
 import { idGenerator, LabelOptColor } from './common';
 import ExplorerViewer from './explorer-viewer';
+import CombineViewer from './combine-viewer';
 
 enum ConstructorMode {
     SHOW = 'SHOW',
@@ -500,6 +501,20 @@ class LabelsEditorComponent extends React.PureComponent<
                             statistics={statistics || undefined}
                             projectInstance={this.props.projectInstance}
                             projectTasks={projectTasks}
+                        />
+                    ),
+                }, {
+                    key: 'combine',
+                    label: (
+                        <span>
+                            <ClusterOutlined />
+                            <Text>COMBINE</Text>
+                        </span>
+                    ),
+                    children: (
+                        <CombineViewer
+                            key='combine'
+                            labels={savedAndUnsavedLabels}
                         />
                     ),
                 }]}
