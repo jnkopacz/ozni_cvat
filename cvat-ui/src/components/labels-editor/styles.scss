@@ -271,9 +271,11 @@ textarea.ant-input.cvat-raw-labels-viewer {
 
 .cvat-combine-viewer {
     padding: 15px;
-    background: #1e1e1e;
+    background: #FFFFFF;
     overflow: auto;
     height: 100%;
+    border: 1px solid #d9d9d9;
+    border-radius: 3px;
 
     .js-plotly-plot {
         margin: 0 auto;

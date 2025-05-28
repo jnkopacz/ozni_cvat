@@ -19,7 +19,7 @@ from config import CHIP_LIMIT, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEF
 from services.label_hierarchy_service import LabelHierarchyService
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, supports_credentials=True)  # Enable CORS with credentials support
 
 # Configure Flask to ignore specific files for auto-reload
 # This will prevent reloading when test_api.py changes

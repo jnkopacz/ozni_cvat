@@ -515,6 +515,7 @@ class LabelsEditorComponent extends React.PureComponent<
                         <CombineViewer
                             key='combine'
                             labels={savedAndUnsavedLabels}
+                            projectInstance={this.props.projectInstance}
                         />
                     ),
                 }]}
