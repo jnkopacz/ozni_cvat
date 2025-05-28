@@ -17,6 +17,8 @@ ozni-combine/pkls/*
 cvat-embedding-explorer/node_modules
 ozni-combine/examples/*pkl
 ozni-combine/examples/*html
+ozni-combine/chip*png
+ozni-combine/*.html
 
 # Ignore temporary files
 docker-compose.override.yml
