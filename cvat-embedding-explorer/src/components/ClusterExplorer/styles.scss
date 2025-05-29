@@ -5,16 +5,16 @@
   .cvat-cluster-explorer-header {
     display: flex;
     align-items: center;
-    margin-bottom: 0px;
+    margin-bottom: 4px;
 
     h2 {
-      margin: 0 0 0 16px;
+      margin: 16px;
     }
   }
 
   .cvat-cluster-explorer-tabs {
     background-color: $background-color-2;
-    border-radius: 4px;
+    border-radius: 8px;
     box-shadow: $box-shadow;
 
     .ant-tabs-content {
