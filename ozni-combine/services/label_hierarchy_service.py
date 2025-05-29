@@ -45,6 +45,10 @@ class LabelHierarchyService:
     def analyze_label_hierarchy(self, labels: Dict[str, int]) -> Dict[str, Any]:
         """Use LLM to analyze labels and create a hierarchical structure"""
         # Construct prompt for the LLM with label counts
+
+# You must use all input labels as base first level leaf nodes. Use the second level to merge duplicate or nearly identical labels.
+# 4. The frequency of each label when determining importance
+
         label_info = [f"{label} " for label, count in labels.items()]
         prompt = f"""Given these labels from a computer vision dataset: {', '.join(label_info)}
 
@@ -52,7 +56,8 @@ Please analyze these labels and create a hierarchical categorization structure. 
 1. Common parent categories that group related labels
 2. Natural subcategories within each group
 3. Any implicit relationships between labels
-4. The frequency of each label when determining importance
+
+The hierarchy should be a 4 layer hierarchy with the first level being the provided labels, the second level merging similar labels, the third level being the subcategories, and the fourth level being a logical summary level.
 
 Output the hierarchy as a JSON structure with these properties:
 - Each node should have a "name" and "children" array
@@ -71,7 +76,8 @@ Format the response as valid JSON only, no additional text."""
             )
             # Parse the response as JSON
             hierarchy = json.loads(response.response)
-            #pretty print the hierarchy
+
+
             return hierarchy
 
         except Exception as e:
@@ -108,6 +114,22 @@ Format the response as valid JSON only, no additional text."""
 
         # Analyze and create hierarchy
         hierarchy = self.analyze_label_hierarchy(label_counts)
+        # Add validation and correction of flow counts
+        def validate_flows(node):
+            if 'children' not in node or not node['children']:
+                return node.get('count', 0)
+
+            # Calculate incoming flow (sum of children)
+            incoming_flow = sum(validate_flows(child) for child in node['children'])
+
+            # Set the node's count equal to incoming flow to ensure consistent edge thickness
+            node['count'] = incoming_flow
+            return incoming_flow
+
+        validate_flows(hierarchy)
+
+        #pretty print the hierarchy
+        print(json.dumps(hierarchy, indent=2))
 
         result = {
             "project_id": project_id,
