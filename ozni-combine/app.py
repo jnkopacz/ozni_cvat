@@ -10,6 +10,8 @@ import threading
 import json
 import re
 import traceback
+from pathlib import Path
+import mimetypes
 
 from services.cvat_service import CVATService
 from services.embedding_service import EmbeddingService
@@ -45,6 +47,10 @@ if app.debug:
 # Directory for storing embedding data
 EMBEDDINGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'embeddings')
 os.makedirs(EMBEDDINGS_DIR, exist_ok=True)
+
+# Add this constant with the other constants near the top of the file
+AUDIO_FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'audio_files')
+os.makedirs(AUDIO_FILES_DIR, exist_ok=True)
 
 # In-memory storage for jobs and results
 # In production, consider using Redis or another persistent store
@@ -537,6 +543,72 @@ def get_label_hierarchy(project_id):
         return jsonify(hierarchy)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Add this helper function with the other helper functions
+def get_audio_file_path(frame_name: str) -> Path:
+    """
+    Convert an image frame filename to its corresponding audio file path.
+    Example: frame_000000.png -> frame_000000.mp3
+    """
+    # Remove file extension and convert to audio extension
+    base_name = os.path.splitext(frame_name)[0]
+    audio_name = f"{base_name}.wav"
+
+
+    # Construct path within audio files directory
+    return Path(AUDIO_FILES_DIR) / audio_name
+
+# Add this new endpoint to check audio availability
+@app.route('/api/audio_check/<path:filename>', methods=['GET'])
+def check_audio_file(filename):
+    """
+    Check if an audio file exists for a given frame.
+    Returns 200 if exists, 404 if not.
+    """
+    print(f"Check called. Look for audio file for {filename}")
+    try:
+        audio_path = get_audio_file_path(filename)
+        if audio_path.exists():
+            return '', 200
+        return '', 404
+    except Exception as e:
+        print(f"Error checking audio file: {e}")
+        return '', 500
+
+
+# Add this new endpoint
+@app.route('/api/audio/<path:filename>', methods=['GET'])
+def get_audio_file(filename):
+    """
+    Serve audio file corresponding to a frame.
+    Returns 404 if the audio file doesn't exist.
+    """
+    print(f"Get called. Look for audio file for {filename}")
+
+    try:
+        # Get the audio file path
+        audio_path = get_audio_file_path(filename)
+        print(f"Audio path: {audio_path}")
+        # Check if file exists
+        if not audio_path.exists():
+            print(f"Audio file not found: {audio_path}")
+            return jsonify({"error": "Audio file not found"}), 404
+
+        # Determine the correct MIME type
+        mime_type = mimetypes.guess_type(str(audio_path))[0] or 'audio/mpeg'
+        print(f"Mime type: {mime_type}")
+        # Return the audio file with proper MIME type
+        return send_file(
+            str(audio_path),
+            mimetype=mime_type,
+            as_attachment=False,
+            download_name=audio_path.name
+        )
+
+    except Exception as e:
+        print(f"Error serving audio file: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

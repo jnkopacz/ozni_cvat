@@ -26,6 +26,7 @@ interface StateToProps {
     fetching: boolean;
     annotationsInitialized: boolean;
     workspace: Workspace;
+    frameFilename: string;
 }
 
 interface DispatchToProps {
@@ -45,6 +46,7 @@ function mapStateToProps(state: CombinedState, own: OwnProps): StateToProps {
             player: {
                 frame: {
                     number: frameNumber,
+                    filename: frameFilename,
                 },
             },
             annotations: {
@@ -59,6 +61,7 @@ function mapStateToProps(state: CombinedState, own: OwnProps): StateToProps {
         workspace,
         frameNumber,
         annotationsInitialized,
+        frameFilename,
     };
 }
 

@@ -26,12 +26,14 @@ import { usePrevious } from 'utils/hooks';
 import EventRecorder from 'utils/event-recorder';
 import { readLatestFrame } from 'utils/remember-latest-frame';
 import { EventScope } from 'cvat-core/src/enums';
+import AudioPlayer from 'components/annotation-page/audio-player/audio-player';
 
 interface Props {
     job: Job | null | undefined;
     fetching: boolean;
     annotationsInitialized: boolean;
     frameNumber: number;
+    frameFilename: string;
     workspace: Workspace;
     getJob(): void;
     saveLogs(): void;
@@ -41,7 +43,7 @@ interface Props {
 
 export default function AnnotationPageComponent(props: Props): JSX.Element {
     const {
-        job, fetching, annotationsInitialized, workspace, frameNumber,
+        job, fetching, annotationsInitialized, workspace, frameNumber, frameFilename,
         getJob, closeJob, saveLogs, changeFrame,
     } = props;
     const prevJob = usePrevious(job);
@@ -147,6 +149,15 @@ export default function AnnotationPageComponent(props: Props): JSX.Element {
             <Layout.Header className='cvat-annotation-header'>
                 <AnnotationTopBarContainer />
             </Layout.Header>
+            {job && frameFilename && (
+                <div className='cvat-annotation-audio-container'>
+                    <AudioPlayer
+                        jobInstance={job}
+                        frameFilename={frameFilename}
+                        frameNumber={frameNumber}
+                    />
+                </div>
+            )}
             <Layout.Content className='cvat-annotation-layout-content'>
                 {workspace === Workspace.STANDARD3D && <StandardWorkspace3DComponent />}
                 {workspace === Workspace.STANDARD && <StandardWorkspaceComponent />}
