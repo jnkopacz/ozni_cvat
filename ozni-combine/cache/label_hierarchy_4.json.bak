@@ -1,0 +1,189 @@
+{
+  "project_id": 4,
+  "label_count": 24,
+  "total_annotations": 28102,
+  "hierarchy": {
+    "name": "Military Vehicles & Aircraft",
+    "type": "category",
+    "description": "Top-level categorization of military assets.",
+    "children": [
+      {
+        "name": "Armored Fighting Vehicles",
+        "type": "category",
+        "description": "Vehicles designed for direct combat and protection.",
+        "children": [
+          {
+            "name": "Main Battle Tanks",
+            "type": "category",
+            "description": "Primary armored combat vehicles.",
+            "children": [
+              {
+                "name": "M1A1_MBT",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "m1a1abrams",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "M1_Abrams_Tank",
+                "type": "label",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "name": "Armored Recovery Vehicle",
+            "type": "category",
+            "description": "Vehicles used for recovering damaged or disabled vehicles.",
+            "children": [
+              {
+                "name": "M88_ARV",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "m88",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "M88_Recovery_Vehicle",
+                "type": "label",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "name": "Light Armored Vehicle",
+            "type": "category",
+            "description": "Vehicles providing mobility and protection for infantry",
+            "children": [
+              {
+                "name": "LAV25_ARV",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "LAV-25",
+                "type": "label",
+                "count": 1
+              },
+              {
+                "name": "Light_Armored_Vehicle_25",
+                "type": "label",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Artillery",
+        "type": "category",
+        "description": "Long-range weapons systems.",
+        "children": [
+          {
+            "name": "M777_ART",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "M777Howitzer",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "M777_Lightweight_Towed_Howitzer",
+            "type": "label",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "name": "Utility & Transport Vehicles",
+        "type": "category",
+        "description": "Vehicles used for logistics and troop transport.",
+        "children": [
+          {
+            "name": "LCU",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "LCU1627_LCU",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "Landing_Craft_Utility",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "Landing_Craft_Air_Cushion",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "LCAC",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "LCAC100_SSC",
+            "type": "label",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "name": "Ground Mobility Vehicles",
+        "type": "category",
+        "description": "Vehicles designed for general-purpose transportation",
+        "children": [
+          {
+            "name": "HUMVEE",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "M1151_HMMWV",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "High_Mobility_Multipurpose_Wheeled_Vehicle",
+            "type": "label",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "name": "Aircraft",
+        "type": "category",
+        "description": "Rotary and fixed-wing aircraft",
+        "children": [
+          {
+            "name": "V22_VTOL",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "V_22_Osprey",
+            "type": "label",
+            "count": 1
+          },
+          {
+            "name": "Osprey",
+            "type": "label",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  "cached_at": "2025-05-26T18:35:20.875104"
+}

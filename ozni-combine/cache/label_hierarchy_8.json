@@ -1,0 +1,142 @@
+{
+  "project_id": 8,
+  "label_count": 8,
+  "total_annotations": 1304,
+  "hierarchy": {
+    "name": "Military Vehicles & Craft",
+    "type": "category",
+    "description": "Top-level categorization encompassing all provided labels.",
+    "children": [
+      {
+        "name": "Armored Fighting Vehicles",
+        "type": "category",
+        "description": "Vehicles designed for direct combat and providing fire support.",
+        "children": [
+          {
+            "name": "Main Battle Tanks",
+            "type": "category",
+            "description": "Heavily armored tanks designed for frontline combat.",
+            "children": [
+              {
+                "name": "M1_Abrams_Tank",
+                "type": "label",
+                "count": 1,
+                "description": "The primary main battle tank of the US Army."
+              }
+            ],
+            "count": 1
+          },
+          {
+            "name": "Recovery & Support Vehicles",
+            "type": "category",
+            "description": "Vehicles designed for recovery, repair, and logistical support of armored units.",
+            "children": [
+              {
+                "name": "M88_Recovery_Vehicle",
+                "type": "label",
+                "count": 1,
+                "description": "Used to recover damaged or disabled tanks and other heavy vehicles."
+              }
+            ],
+            "count": 1
+          },
+          {
+            "name": "Light Armored Vehicles",
+            "type": "category",
+            "description": "Lightly armored vehicles used for reconnaissance and transport",
+            "children": [
+              {
+                "name": "Light_Armored_Vehicle_25",
+                "type": "label",
+                "count": 1,
+                "description": "A versatile, multipurpose, light armored vehicle."
+              }
+            ],
+            "count": 1
+          }
+        ],
+        "count": 3
+      },
+      {
+        "name": "Artillery",
+        "type": "category",
+        "description": "Vehicles and systems designed for long-range indirect fire support.",
+        "children": [
+          {
+            "name": "Towed Artillery",
+            "type": "category",
+            "description": "Artillery pieces that are towed into position.",
+            "children": [
+              {
+                "name": "M777_Lightweight_Towed_Howitzer",
+                "type": "label",
+                "count": 1,
+                "description": "A modern, lightweight, and highly mobile howitzer."
+              }
+            ],
+            "count": 1
+          }
+        ],
+        "count": 1
+      },
+      {
+        "name": "Transport & Landing Craft",
+        "type": "category",
+        "description": "Vehicles designed to transport troops, equipment, and supplies.",
+        "children": [
+          {
+            "name": "Amphibious Landing Craft",
+            "type": "category",
+            "description": "Craft designed to transport troops and equipment from ship to shore.",
+            "children": [
+              {
+                "name": "Landing_Craft_Utility",
+                "type": "label",
+                "count": 1,
+                "description": "A versatile landing craft used for a variety of roles."
+              },
+              {
+                "name": "Landing_Craft_Air_Cushion",
+                "type": "label",
+                "count": 1,
+                "description": "A high-speed landing craft that uses an air cushion for propulsion."
+              }
+            ],
+            "count": 2
+          },
+          {
+            "name": "Tiltrotor Aircraft",
+            "type": "category",
+            "description": "Aircraft capable of vertical takeoff and landing with high speed flight.",
+            "children": [
+              {
+                "name": "V_22_Osprey",
+                "type": "label",
+                "count": 1,
+                "description": "A versatile tiltrotor aircraft used for troop transport and logistical support."
+              }
+            ],
+            "count": 1
+          }
+        ],
+        "count": 3
+      },
+      {
+        "name": "Utility Vehicles",
+        "type": "category",
+        "description": "Versatile vehicles for logistical support, reconnaissance, and personnel transport.",
+        "children": [
+          {
+            "name": "High_Mobility_Multipurpose_Wheeled_Vehicle",
+            "type": "label",
+            "count": 1,
+            "description": "A highly versatile and adaptable utility vehicle."
+          }
+        ],
+        "count": 1
+      }
+    ],
+    "count": 8
+  },
+  "cached_at": "2025-05-29T17:03:01.825632"
+}

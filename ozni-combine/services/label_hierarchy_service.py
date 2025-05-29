@@ -111,22 +111,25 @@ Format the response as valid JSON only, no additional text."""
 
         # Get all labels from the project with counts
         label_counts = self.get_project_labels(project_id)
+        print("Label counts", label_counts)
 
         # Analyze and create hierarchy
         hierarchy = self.analyze_label_hierarchy(label_counts)
+
         # Add validation and correction of flow counts
-        def validate_flows(node):
+        def validate_flows(node, label_counts):
             if 'children' not in node or not node['children']:
-                return node.get('count', 0)
+                # For leaf nodes, get count from original label_counts
+                print("Leaf node", node['name'], label_counts.get(node['name'], 1))
+                node['count'] = label_counts.get(node['name'], 1)
+                return node['count']
 
-            # Calculate incoming flow (sum of children)
-            incoming_flow = sum(validate_flows(child) for child in node['children'])
+            # For non-leaf nodes, sum up children's counts
+            total_count = sum(validate_flows(child, label_counts) for child in node['children'])
+            node['count'] = total_count
+            return total_count
 
-            # Set the node's count equal to incoming flow to ensure consistent edge thickness
-            node['count'] = incoming_flow
-            return incoming_flow
-
-        validate_flows(hierarchy)
+        validate_flows(hierarchy, label_counts)
 
         #pretty print the hierarchy
         print(json.dumps(hierarchy, indent=2))

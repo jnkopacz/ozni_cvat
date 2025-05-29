@@ -156,7 +156,7 @@ function analyzeSpatialBias(heatmapData: Array<{ x: number; y: number; value: nu
         alerts.push({
             type: 'warning',
             message: 'Spatial Coverage Gap',
-            description: `${Math.round(emptyRatio * 100)}% of image space has no annotations. See spectrogram below.`,
+            description: `${Math.round(emptyRatio * 100)}% of image space has no annotations. See heatmap below.`,
         });
     }
 
@@ -165,7 +165,7 @@ function analyzeSpatialBias(heatmapData: Array<{ x: number; y: number; value: nu
         alerts.push({
             type: 'warning',
             message: 'Spatial Bias Detected',
-            description: `Some portions of the annotation space are underrepresented. This may create a detection bias in a trained model's predictions. See spectrogram below.`,
+            description: `Some portions of the annotation space are underrepresented. This may create a detection bias in a trained model's predictions. See heatmap below.`,
         });
     }
     return alerts;
@@ -177,7 +177,6 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         const coordinates: number[][] = [];
 
         projectTasks?.forEach((task) => {
-            console.log('Processing task:', task.taskId);
             if (task.annotations?.shapes) {
                 task.annotations.shapes.forEach((shape) => {
                     if (shape.points && shape.points.length >= 4) {
@@ -264,8 +263,9 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
     // Prepare data for the histogram
     const chartData = Object.entries(labelTotalCounts)
         .map(([label, count]) => ({
-            label,
+            label: label.length > 15 ? `${label.slice(0, 12)}...` : label,
             count,
+            originalLabel: label, // Keep original label for tooltip
         }));
 
     // Define chart configuration with proper typing
@@ -273,10 +273,16 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         data: chartData,
         xField: 'label',
         yField: 'count',
-        height: 170,
-        maxColumnWidth: 40,  // Limit maximum width of bars
-        columnWidthRatio: 0.4,  // Control the width of bars relative to available space
-        label: false,  // Remove the labels from the top of bars
+        height: 400,
+        maxColumnWidth: 40,
+        columnWidthRatio: 0.4,
+        label: false,
+        tooltip: {
+            formatter: (datum) => ({
+                name: datum.originalLabel,
+                value: datum.count,
+            }),
+        },
         xAxis: {
             label: {
                 autoRotate: true,
@@ -293,11 +299,10 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
                 },
             },
         },
-        // padding: [40, 20, 20, 20],
         columnStyle: {
             radius: [4, 4, 0, 0],
         },
-        color: '#597EF7',  // Set a specific color for the bars
+        color: '#597EF7',
     };
 
     // Table columns configuration
@@ -431,6 +436,13 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
 
         // for each bbox, mark every cell it covers
         coordinates.forEach(([x1, y1, x2, y2]) => {
+          if (x1==0 && x2==1000 && y1==0 && y2==600) {
+            console.log('rescaling due to audio boxes')
+            x2 = 1920;
+            y2 = 1080;
+            console.log('skipping these..')
+            return;
+          }
 
           // compute pixel‐to‐cell mapping
           const cellX1 = Math.floor((Math.min(x1, x2) / imgW) * gridWidth);
@@ -465,6 +477,8 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         return heatmapData;
       };
 
+    console.log(annotationCoordinates)
+
     const heatmapData = prepareHeatmapData(annotationCoordinates);
 
     // Update heatmap configuration
@@ -472,7 +486,6 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         data: heatmapData,
         xField: 'x',
         yField: 'y',
-        // colorField: 'value',
         colorField: 'value',
 
         color: ({ value }) => {
@@ -486,12 +499,6 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         legend: {
             position: 'bottom',
         },
-        // heatmapStyle: {
-        //     stroke: 'transparent',  // Remove cell borders
-        //     opacity: 1,            // Full opacity
-        //     marginRight: '-1px',   // Negative margin to force overlap
-        //     marginBottom: '-1px',  // Negative margin to force overlap
-        // },
         shape: 'square',
         columnWidthRatio: 1,    // Increase column width ratio
         sizeRatio: 1,          // Increase size ratio further
@@ -522,23 +529,8 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
         yAxis: false,
         legend: false,
         tooltip: false,
-        // meta: {
-        //     x: { type: 'cat' },
-        //     y: { type: 'cat' },
-        // },
-        // tooltip: {
-        //     title: 'Density',
-        //     formatter: (datum: any) => {
-        //         return [
-        //             { name: 'Relative Density', value: datum.value.toFixed(2) },
-        //         ];
-        //     },
-        // },
-        // interactions: [{ type: 'element-active' }],
         height: 400,
         width: 711,  // Maintains 16:9 ratio with height of 400 (400 * 16/9 ≈ 711)
-        // autoFit: true,
-        // appendPadding: [10, 10, 10, 10],
     };
 
     const datasetAlerts = [
@@ -550,7 +542,7 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
     return (
         <div className='cvat-labels-explorer'>
             <Row gutter={[16, 16]}>
-                <Col span={8}>
+                <Col span={12}>
                     <Card>
                         <Statistic
                             title="Total Label Categories"
@@ -560,7 +552,7 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
                         />
                     </Card>
                 </Col>
-                <Col span={8}>
+                <Col span={6}>
                     <Card>
                         <Statistic
                             title="Total Labels"
@@ -569,7 +561,7 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
                         />
                     </Card>
                 </Col>
-                <Col span={8}>
+                <Col span={6}>
                     <Card>
                         <Statistic
                             title="Total Sub-datasets (Tasks)"
@@ -583,37 +575,39 @@ export default function ExplorerViewer({ labels, statistics, projectInstance, pr
             <Row style={{ marginTop: '16px' }}>
                 <Col span={24}>
                     <Card title="Dataset Quality Alerts">
-                        {datasetAlerts.length === 0 ? (
-                            <>
-                                <Alert
-                                    message="Class Balance Analysis"
-                                    description={`All ${Object.keys(labelTotalCounts).length} classes are within normal distribution ranges.
-                                        No class exceeds 3x the mean frequency (${Math.round(Object.values(labelTotalCounts).reduce((a, b) => a + b, 0) / Object.keys(labelTotalCounts).length)} annotations/class),
-                                        and all classes have at least 1000 samples.`}
-                                    type="success"
-                                    showIcon
-                                    style={{ marginBottom: '8px' }}
-                                />
-                                <Alert
-                                    message="Spatial Distribution Analysis"
-                                    description={`Good spatial coverage detected. ${Math.round((1 - heatmapData.filter(cell => cell.value === 0).length / heatmapData.length) * 100)}%
-                                        of the image space contains annotations.`}
-                                    type="success"
-                                    showIcon
-                                />
-                            </>
-                        ) : (
-                            datasetAlerts.map((alert, index) => (
-                                <Alert
-                                    key={index}
-                                    message={alert.message}
-                                    description={alert.description}
-                                    type={alert.type}
-                                    showIcon
-                                    style={{ marginBottom: index < datasetAlerts.length - 1 ? '8px' : 0 }}
-                                />
-                            ))
-                        )}
+                        <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '4px' }}>
+                            {datasetAlerts.length === 0 ? (
+                                <>
+                                    <Alert
+                                        message="Class Balance Analysis"
+                                        description={`All ${Object.keys(labelTotalCounts).length} classes are within normal distribution ranges.
+                                            No class exceeds 3x the mean frequency (${Math.round(Object.values(labelTotalCounts).reduce((a, b) => a + b, 0) / Object.keys(labelTotalCounts).length)} annotations/class),
+                                            and all classes have at least 1000 samples.`}
+                                        type="success"
+                                        showIcon
+                                        style={{ marginBottom: '8px' }}
+                                    />
+                                    <Alert
+                                        message="Spatial Distribution Analysis"
+                                        description={`Good spatial coverage detected. ${Math.round((1 - heatmapData.filter(cell => cell.value === 0).length / heatmapData.length) * 100)}%
+                                            of the image space contains annotations.`}
+                                        type="success"
+                                        showIcon
+                                    />
+                                </>
+                            ) : (
+                                datasetAlerts.map((alert, index) => (
+                                    <Alert
+                                        key={index}
+                                        message={alert.message}
+                                        description={alert.description}
+                                        type={alert.type}
+                                        showIcon
+                                        style={{ marginBottom: index < datasetAlerts.length - 1 ? '8px' : 0 }}
+                                    />
+                                ))
+                            )}
+                        </div>
                     </Card>
                 </Col>
             </Row>

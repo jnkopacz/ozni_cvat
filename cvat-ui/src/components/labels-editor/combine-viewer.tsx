@@ -33,24 +33,29 @@ function CombineViewer(props: Props): JSX.Element {
         const heights: number[] = [];
         const processedLabels: { [key: string]: number } = {};
 
-        const getNodeColor = (height: number, isSelected: boolean, selectedColor?: string): string => {
+        const getNodeColor = (height: number, isSelected: boolean, selectedColor?: string, nodeCount?: number): string => {
 
-            const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF9E16", "#FF16EB"];
+            // const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF9E16", "#FF16EB"];
+            const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF16EB", "#FF9E16"];
             let color = palette[(height) % palette.length];
+            const base_audio_color = "#00ffff";
+            console.log("getting color for", height, selectedColor, nodeCount);
 
-            if (selectedColor) {
-                if (color !== selectedColor) {
-                    return color + "40"; // Add 25% opacity
-                } else {
-                    return color;
-                }
-
+            if (nodeCount && nodeCount < 500) {
+                console.log("audio color selected")
+                color = base_audio_color;
+            }
+            if (selectedColor && color !== selectedColor ) {
+                console.log("opacity added")
+                return color + "40"; // Add 25% opacity
             }
             return color;
         };
 
         const processNode = (node: any, parentIdx: number, height: number) => {
             const nodeName = node.name;
+            const nodeCount = node.count;
+            console.log("nodeCount", nodeName, nodeCount);
             let currentIdx: number;
 
             if (nodeName in processedLabels) {
@@ -58,7 +63,7 @@ function CombineViewer(props: Props): JSX.Element {
             } else {
                 currentIdx = labels.length;
                 labels.push(nodeName);
-                colors.push(getNodeColor(height, false, selectedColor));
+                colors.push(getNodeColor(height, false, selectedColor, nodeCount));
                 heights.push(height);
                 processedLabels[nodeName] = currentIdx;
             }
@@ -91,7 +96,6 @@ function CombineViewer(props: Props): JSX.Element {
                 label_name = label_name.replace(/s$/, '');
                 //remove &
                 label_name = label_name.replace(/&/g, 'and');
-
                 //Remove the word dataset from the label name
                 label_name = label_name.replace('_dataset', '');
 
@@ -124,13 +128,26 @@ function CombineViewer(props: Props): JSX.Element {
                 thickness: 30,
                 line: { color: "black", width: 0.1 },
                 label: labels,
-                color: colors.map((color, idx) => getNodeColor(heights[idx], false, selectedColor)),
+                color: colors
+                // color: colors.map((color, idx) => getNodeColor(heights[idx], false, selectedColor)),
             },
             link: {
                 source: sources,
                 target: targets,
                 value: values,
-                color: sources.map(() => 'rgba(150, 150, 150, 0.4)')
+                color: sources.map((_, idx) => {
+                    // Animate links leading to nodes at the selected height
+                    const targetHeight = heights[targets[idx]];
+                    if (selectedHeight !== null && targetHeight === selectedHeight) {
+                        return 'rgba(150, 150, 150, 0.8)';
+                    }
+                    return 'rgba(150, 150, 150, 0.2)';
+                }),
+                // Add animation properties
+                customdata: sources.map((_, idx) => ({
+                    duration: heights[targets[idx]] * 500, // Cascade animation based on height
+                    easing: 'cubic-in-out'
+                }))
             }
         }];
     };
@@ -205,17 +222,108 @@ function CombineViewer(props: Props): JSX.Element {
             color: '#111111'
         },
         paper_bgcolor: '#FFFFFF',
-        plot_bgcolor: '#FAFAFA',
+        plot_bgcolor: '#FFFFFF',
         width: 950,
         height: 600,
         margin: {
             l: 25,
             r: 25,
             t: 40,
-            b: 25
+            b: 20
         },
         clickmode: 'event',
+        showlegend: true,
+        legend: {
+            orientation: 'h',
+            y: -0.2,
+            x: 0.5,
+            xanchor: 'center',
+            yanchor: 'top',
+            traceorder: 'normal',
+            font: {
+                family: 'Roboto, sans-serif',
+                size: 12,
+                color: '#111111'
+            }
+        },
+        xaxis: {
+            showgrid: false,
+            zeroline: false,
+            showline: false,
+            showticklabels: false
+        },
+        yaxis: {
+            showgrid: false,
+            zeroline: false,
+            showline: false,
+            showticklabels: false
+        },
+        sliders: [{
+            pad: {t: 30},
+            len: 0.95,
+            x: 0.05,
+            currentvalue: {
+                visible: true,
+                prefix: "Flow: ",
+                xanchor: "right",
+                font: { size: 14, color: "#111111" }
+            },
+            steps: [{
+                method: 'animate',
+                args: [
+                    [null],
+                    {
+                        mode: 'immediate',
+                        transition: { duration: 300 },
+                        frame: { duration: 300, redraw: true }
+                    }
+                ],
+                label: 'Start'
+            }]
+        }]
     };
+    const legendData = [
+        {
+            x: [null],
+            y: [null],
+            name: 'Base (Image)',
+            type: 'scatter',
+            marker: { color: '#FF16EB' },
+            showlegend: true,
+        },
+        {
+            x: [null],
+            y: [null],
+            name: 'Base (Audio)',
+            type: 'scatter',
+            marker: { color: '#00FFFF' },
+            showlegend: true,
+        },
+        {
+            x: [null],
+            y: [null],
+            name: 'Tier 2',
+            type: 'scatter',
+            marker: { color: '#77FF16' },
+            showlegend: true,
+        },
+        {
+            x: [null],
+            y: [null],
+            name: 'Tier 3',
+            type: 'scatter',
+            marker: { color: '#9E16FF' },
+            showlegend: true,
+        },
+        {
+            x: [null],
+            y: [null],
+            name: 'Tier 4',
+            type: 'scatter',
+            marker: { color: '#1677FF' },
+            showlegend: true,
+        },
+    ];
 
     return (
         <div className="cvat-combine-viewer">
@@ -256,7 +364,8 @@ function CombineViewer(props: Props): JSX.Element {
             ) : (
                 <>
                     <Plot
-                        data={sankeyData}
+                        // data={sankeyData}
+                        data={[...sankeyData, ...legendData]}
                         layout={layout}
                         config={{
                             displayModeBar: true,
@@ -282,7 +391,7 @@ function CombineViewer(props: Props): JSX.Element {
                                     //     const palette = ["#21918c", "#5ec962", "#fde725", "#440154"];
                                     //     color = palette[(height - 1) % palette.length];
                                     // }
-                                    const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF9E16", "#FF16EB"];
+                                    const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF16EB", "#FF9E16"];
                                     let color = palette[(height) % palette.length];
                                     // Toggle the selected color
                                     setSelectedColor(selectedColor === color ? null : color);
@@ -321,7 +430,7 @@ function CombineViewer(props: Props): JSX.Element {
 
 
                                         updateInProgressRef.current = true;
-                                        const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF9E16", "#FF16EB"];
+                                        const palette =  ["#1677FF","#9E16FF", "#77FF16", "#FF16EB", "#FF9E16"];
                                         let color = hex;
                                         //height is the index of the color in the palette
                                         const height = palette.indexOf(color);
