@@ -92,9 +92,9 @@ const ClusterExplorer: React.FC = () => {
   const [labelModalVisible, setLabelModalVisible] = useState<boolean>(false);
   const [newLabel, setNewLabel] = useState<string>('');
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
-  const [chipViewerVisible, setChipViewerVisible] = useState<boolean>(false);
-  const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [zoom, setZoom] = useState<number>(1);
+  const [searchText, setSearchText] = useState<string>('');
+  const [chipViewerVisible, setChipViewerVisible] = useState<boolean>(false);
 
   // Fetch project data and embedding status
   useEffect(() => {
@@ -239,6 +239,14 @@ const ClusterExplorer: React.FC = () => {
 
   const handlePointSelection = (points: string[]) => {
     setSelectedPoints(points);
+    if (points.length > 0) {
+      if (points.length > 100) {
+        points = points.slice(0, 100);
+      }
+      setChipViewerVisible(true);
+    } else {
+      setChipViewerVisible(false);
+    }
   };
 
   const handleClusterSelection = (clusterId: number | null) => {
@@ -271,8 +279,7 @@ const ClusterExplorer: React.FC = () => {
       chipIds = chipIds.slice(0, 100);
     }
 
-    setSelectedChips(chipIds);
-    setChipViewerVisible(true);
+    setSelectedPoints(chipIds);
   };
 
   const handleLabelSelection = () => {
@@ -342,6 +349,24 @@ const ClusterExplorer: React.FC = () => {
 
   const handleResetZoom = () => {
     setZoom(1);
+  };
+
+  const handleSearch = (value: string) => {
+    if (!visualizationData) return;
+
+    const searchLower = value.toLowerCase();
+    const matchingPoints = visualizationData.points
+      .filter(point =>
+        point.filename.toLowerCase().includes(searchLower) ||
+        point.description.toLowerCase().includes(searchLower)
+      )
+      .map(point => point.id);
+
+    if (matchingPoints.length > 0) {
+      handlePointSelection(matchingPoints);
+    } else {
+      handlePointSelection([]);
+    }
   };
 
   if (loading) {
@@ -491,9 +516,14 @@ const ClusterExplorer: React.FC = () => {
             <div className="cvat-cluster-explorer-visualization">
               <div className="cvat-cluster-visualization-toolbar">
                 <div className="cvat-cluster-visualization-actions">
-                  <Tooltip title="View selected chips">
-
-                  </Tooltip>
+                  <Search
+                    placeholder="Search by filename or description"
+                    allowClear
+                    enterButton
+                    style={{ width: 300, marginRight: 16 }}
+                    onSearch={handleSearch}
+                    onChange={(e) => setSearchText(e.target.value)}
+                  />
                   <Tooltip title="Label selected points or cluster">
                     <Button
                       icon={<TagOutlined />}
@@ -711,7 +741,7 @@ const ClusterExplorer: React.FC = () => {
       </Modal>
 
       {/* Chip Viewer Modal */}
-      <Modal
+      {/* <Modal
         title="Chip Viewer"
         open={chipViewerVisible}
         onCancel={() => setChipViewerVisible(false)}
@@ -722,13 +752,13 @@ const ClusterExplorer: React.FC = () => {
           </Button>
         ]}
       >
-        {selectedChips.length > 0 && (
+        {selectedPoints.length > 0 && (
           <ChipViewer
             projectId={parseInt(projectId)}
-            chipIds={selectedChips}
+            chipIds={selectedPoints}
           />
         )}
-      </Modal>
+      </Modal> */}
 
       {/* Show chip grid for selected cluster */}
       {selectedCluster !== null && visualizationData && (
