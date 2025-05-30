@@ -1,7 +1,9 @@
 // src/components/ClusterExplorer/ChipViewer.tsx
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Spin, Empty, Typography, Tag, Checkbox } from 'antd';
+import { Row, Col, Card, Spin, Empty, Typography, Tag, Checkbox, Button, Tooltip } from 'antd';
+import { CloseOutlined, UndoOutlined } from '@ant-design/icons';
 import { api } from '../../api/api';
+import { useLabelingSession } from '../../contexts/LabelingSessionContext';
 import './styles.scss';
 
 const { Text } = Typography;
@@ -9,6 +11,8 @@ const { Text } = Typography;
 interface ChipViewerProps {
   projectId: number;
   chipIds: string[];
+  clusterId: number;
+  onChipMoveToNoise?: (chipId: string) => void;
 }
 
 interface Chip {
@@ -17,12 +21,19 @@ interface Chip {
   label: string | null;
   clusterId: number;
   selected: boolean;
+  inNoise: boolean;
 }
 
-const ChipViewer: React.FC<ChipViewerProps> = ({ projectId, chipIds }) => {
+const ChipViewer: React.FC<ChipViewerProps> = ({ 
+  projectId, 
+  chipIds, 
+  clusterId, 
+  onChipMoveToNoise
+}) => {
   const [chips, setChips] = useState<Chip[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { isChipInNoise, getChipLabel, moveChipToNoise } = useLabelingSession();
 
   useEffect(() => {
     const fetchChips = async () => {
@@ -32,9 +43,10 @@ const ChipViewer: React.FC<ChipViewerProps> = ({ projectId, chipIds }) => {
         const chipObjects = chipIds.map(id => ({
           id,
           url: api.getChipUrl(projectId, id),
-          label: null, // We don't have labels from the API yet
-          clusterId: -1, // We don't have this information here
-          selected: false
+          label: getChipLabel(id) || null,
+          clusterId,
+          selected: false,
+          inNoise: isChipInNoise(id)
         }));
 
         setChips(chipObjects);
@@ -48,7 +60,7 @@ const ChipViewer: React.FC<ChipViewerProps> = ({ projectId, chipIds }) => {
     };
 
     fetchChips();
-  }, [projectId, chipIds]);
+  }, [projectId, chipIds, clusterId, isChipInNoise, getChipLabel]);
 
   const handleChipSelection = (chipId: string, selected: boolean) => {
     setChips(prevChips =>
@@ -57,6 +69,19 @@ const ChipViewer: React.FC<ChipViewerProps> = ({ projectId, chipIds }) => {
       )
     );
   };
+
+  const handleChipMoveToNoise = (chipId: string) => {
+    moveChipToNoise(chipId);
+    setChips(prevChips =>
+      prevChips.map(chip =>
+        chip.id === chipId ? { ...chip, inNoise: true } : chip
+      )
+    );
+    onChipMoveToNoise?.(chipId);
+  };
+
+  const activeChips = chips.filter(chip => !chip.inNoise);
+  const noiseChips = chips.filter(chip => chip.inNoise);
 
   if (loading) {
     return (
@@ -85,34 +110,90 @@ const ChipViewer: React.FC<ChipViewerProps> = ({ projectId, chipIds }) => {
 
   return (
     <div className="cvat-chip-viewer">
-      <div className="cvat-chip-viewer-grid">
-        <Row gutter={[16, 16]}>
-          {chips.map(chip => (
-            <Col key={chip.id} span={6}>
-              <Card
-                className={`cvat-chip-card ${chip.selected ? 'cvat-chip-card-selected' : ''}`}
-                cover={<img alt={`Chip ${chip.id}`} src={chip.url} />}
-                size="small"
-                hoverable
-                onClick={() => handleChipSelection(chip.id, !chip.selected)}
-              >
-                <div className="cvat-chip-card-content">
-                  <Checkbox
-                    checked={chip.selected}
-                    onChange={e => handleChipSelection(chip.id, e.target.checked)}
-                    onClick={e => e.stopPropagation()}
-                  />
-                  {chip.label ? (
-                    <Tag color="blue">{chip.label}</Tag>
-                  ) : (
-                    <Tag color="gray">Unlabeled</Tag>
-                  )}
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+      {/* Active Chips */}
+      <div className="cvat-chip-viewer-section">
+        <div className="cvat-chip-viewer-section-header">
+          <Text strong>Cluster Chips ({activeChips.length})</Text>
+          <Text type="secondary">Click X to move chips to noise cluster</Text>
+        </div>
+        <div className="cvat-chip-viewer-grid">
+          <Row gutter={[16, 16]}>
+            {activeChips.map(chip => (
+              <Col key={chip.id} span={6}>
+                <Card
+                  className={`cvat-chip-card ${chip.selected ? 'cvat-chip-card-selected' : ''}`}
+                  cover={
+                    <div className="cvat-chip-card-image-container">
+                      <img alt={`Chip ${chip.id}`} src={chip.url} />
+                      <div className="cvat-chip-card-exclude-btn">
+                        <Tooltip title="Move to noise cluster">
+                          <Button
+                            type="primary"
+                            danger
+                            size="small"
+                            icon={<CloseOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChipMoveToNoise(chip.id);
+                            }}
+                          />
+                        </Tooltip>
+                      </div>
+                    </div>
+                  }
+                  size="small"
+                  hoverable
+                  onClick={() => handleChipSelection(chip.id, !chip.selected)}
+                >
+                  <div className="cvat-chip-card-content">
+                    <Checkbox
+                      checked={chip.selected}
+                      onChange={e => handleChipSelection(chip.id, e.target.checked)}
+                      onClick={e => e.stopPropagation()}
+                    />
+                    {chip.label ? (
+                      <Tag color="blue">{chip.label}</Tag>
+                    ) : (
+                      <Tag color="gray">Unlabeled</Tag>
+                    )}
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </div>
       </div>
+
+      {/* Noise Chips */}
+      {noiseChips.length > 0 && (
+        <div className="cvat-chip-viewer-section cvat-chip-viewer-excluded">
+          <div className="cvat-chip-viewer-section-header">
+            <Text strong>Moved to Noise Cluster ({noiseChips.length})</Text>
+            <Text type="secondary">These chips are now in the noise cluster (-1)</Text>
+          </div>
+          <div className="cvat-chip-viewer-grid">
+            <Row gutter={[16, 16]}>
+              {noiseChips.map(chip => (
+                <Col key={chip.id} span={6}>
+                  <Card
+                    className="cvat-chip-card cvat-chip-card-excluded"
+                    cover={
+                      <div className="cvat-chip-card-image-container">
+                        <img alt={`Chip ${chip.id}`} src={chip.url} />
+                      </div>
+                    }
+                    size="small"
+                  >
+                    <div className="cvat-chip-card-content">
+                      <Tag color="orange">Noise</Tag>
+                    </div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

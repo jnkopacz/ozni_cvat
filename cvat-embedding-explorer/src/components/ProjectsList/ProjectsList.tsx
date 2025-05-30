@@ -2,10 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Table, Button, Space, Tag, Typography, Tooltip, message } from 'antd';
-import { 
-  ReloadOutlined, 
-  ClusterOutlined, 
-  CheckCircleOutlined, 
+import {
+  ReloadOutlined,
+  ClusterOutlined,
+  CheckCircleOutlined,
   CloseCircleOutlined,
   LoadingOutlined
 } from '@ant-design/icons';
@@ -24,7 +24,7 @@ const ProjectsList: React.FC = () => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showEmbeddingPanel, setShowEmbeddingPanel] = useState<boolean>(false);
-  
+
   const history = useHistory();
 
   const fetchProjects = async () => {
@@ -32,7 +32,7 @@ const ProjectsList: React.FC = () => {
     try {
       const data = await api.getProjects();
       setProjects(data);
-      
+
       // Check embedding status for each project
       const statuses: Record<number, EmbeddingStatus> = {};
       for (const project of data) {
@@ -109,7 +109,7 @@ const ProjectsList: React.FC = () => {
         if (!status) {
           return <LoadingOutlined />;
         }
-        
+
         return status.exists ? (
           <Tag color="success" icon={<CheckCircleOutlined />}>
             Available ({status.location})
@@ -126,18 +126,18 @@ const ProjectsList: React.FC = () => {
       key: 'actions',
       render: (_: any, record: Project) => {
         const status = embeddingStatuses[record.id];
-        
+
         return (
           <Space size="middle">
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               icon={<ClusterOutlined />}
               onClick={() => handleExploreProject(record.id)}
               disabled={!status?.exists}
             >
               Explore
             </Button>
-            <Button 
+            <Button
               onClick={() => handleStartEmbedding(record)}
               icon={status?.exists ? <ReloadOutlined /> : undefined}
             >
@@ -153,28 +153,28 @@ const ProjectsList: React.FC = () => {
     <div className="cvat-projects-list-page">
       <div className="cvat-projects-list-header">
         <Title level={2}>Projects</Title>
-        <Button 
-          type="primary" 
-          icon={<ReloadOutlined />} 
+        <Button
+          type="primary"
+          icon={<ReloadOutlined />}
           onClick={fetchProjects}
           loading={loading}
         >
           Refresh
         </Button>
       </div>
-      
+
       <div className="cvat-projects-list-content">
-        <Table 
-          columns={columns} 
-          dataSource={projects} 
-          rowKey="id" 
+        <Table
+          columns={columns}
+          dataSource={projects}
+          rowKey="id"
           loading={loading}
           pagination={{ pageSize: 10 }}
         />
       </div>
 
       {showEmbeddingPanel && selectedProject && (
-        <EmbeddingJobPanel 
+        <EmbeddingJobPanel
           project={selectedProject}
           tasks={tasks}
           visible={showEmbeddingPanel}

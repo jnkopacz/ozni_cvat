@@ -41,6 +41,8 @@ import { api } from '../../api/api';
 import { Project, EmbeddingStatus, ClusteringRequest } from '../../models/types';
 import ClusterVisualization from './ClusterVisualization';
 import ChipViewer from './ChipViewer';
+import SessionProgressTracker from './SessionProgressTracker';
+import { useLabelingSession, ClusterState } from '../../contexts/LabelingSessionContext';
 import './styles.scss';
 
 const { Title, Text, Paragraph } = Typography;
@@ -95,6 +97,25 @@ const ClusterExplorer: React.FC = () => {
   const [zoom, setZoom] = useState<number>(1);
   const [searchText, setSearchText] = useState<string>('');
   const [chipViewerVisible, setChipViewerVisible] = useState<boolean>(false);
+  const [isSearchMode, setIsSearchMode] = useState<boolean>(false);
+  
+  // Session management
+  const {
+    initSession,
+    labelChips,
+    labelCluster,
+    setClusterState,
+    setCurrentCluster,
+    getClusterState,
+    getClusterLabel,
+    isChipFinished,
+    isChipInNoise,
+    getChipFinalCluster,
+    updateClustering,
+    clearNoiseCluster,
+    moveChipToNoise,
+    state: sessionState
+  } = useLabelingSession();
 
   // Fetch project data and embedding status
   useEffect(() => {
@@ -145,6 +166,9 @@ const ClusterExplorer: React.FC = () => {
   const runClustering = async (values: any) => {
     try {
       setClusteringLoading(true);
+      
+      // Clear noise cluster when re-running clustering
+      clearNoiseCluster();
 
       const clusteringRequest: ClusteringRequest = {
         project_id: parseInt(projectId),
@@ -189,8 +213,8 @@ const ClusterExplorer: React.FC = () => {
         }
       });
 
-      // Transform points data
-      const points: Point[] = vizResult.points.map((point: any) => {
+      // Transform points data, filtering out finished/labeled chips
+      const allPoints: Point[] = vizResult.points.map((point: any) => {
         return {
           id: point.filename,
           x: point.coordinates[0],
@@ -204,11 +228,30 @@ const ClusterExplorer: React.FC = () => {
         };
       });
 
+      // Filter out finished chips from visualization and update noise chips
+      const points = allPoints.filter(point => !isChipFinished(point.filename)).map(point => {
+        // Check if chip has been moved to noise cluster
+        if (isChipInNoise(point.filename)) {
+          return {
+            ...point,
+            clusterId: -1 // Move to noise cluster
+          };
+        }
+        return point;
+      });
+
       setVisualizationData({
-        points,
+        points, // Only show unlabeled points in main visualization
         clusters,
         dimensions: vizResult.dimensions
       });
+
+      // Initialize session if not already done, or update with new chip count
+      if (!sessionState.session) {
+        initSession(parseInt(projectId), allPoints.length);
+      } else {
+        updateClustering(allPoints.length);
+      }
 
       // Reset selections
       setSelectedPoints([]);
@@ -251,6 +294,24 @@ const ClusterExplorer: React.FC = () => {
 
   const handleClusterSelection = (clusterId: number | null) => {
     setSelectedCluster(clusterId);
+    setCurrentCluster(clusterId);
+    
+    if (clusterId !== null) {
+      // Set cluster state to under review when selected
+      const currentState = getClusterState(clusterId);
+      if (currentState === ClusterState.UNLABELED) {
+        setClusterState(clusterId, ClusterState.UNDER_REVIEW);
+      }
+      
+      // Get all points in the cluster (excluding finished ones)
+      if (visualizationData) {
+        const clusterPoints = visualizationData.points
+          .filter(p => p.clusterId === clusterId && !isChipFinished(p.filename))
+          .map(p => p.filename);
+        setSelectedPoints(clusterPoints);
+        setChipViewerVisible(true);
+      }
+    }
   };
 
   const handleViewChips = () => {
@@ -297,32 +358,78 @@ const ClusterExplorer: React.FC = () => {
     }
 
     try {
-      // In a real implementation, this would be an API call to update labels
-      // For now, we'll just update the local state
+      if (isSearchMode || (selectedCluster === null && selectedPoints.length > 0) || selectedCluster === -1) {
+        // Search mode, individual chip selection, or noise cluster - label only the selected chips
+        const chipsToLabel = selectedPoints.filter(id => !isChipFinished(id));
+        
+        // Apply label to specific chips
+        labelChips(chipsToLabel, newLabel);
+        
+        // Remove labeled points from visualization
+        if (visualizationData) {
+          const remainingPoints = visualizationData.points.filter(
+            p => !chipsToLabel.includes(p.filename)
+          );
+          
+          setVisualizationData({
+            ...visualizationData,
+            points: remainingPoints
+          });
+        }
+        
+        message.success(`Applied label "${newLabel}" to ${chipsToLabel.length} selected chips`);
+      } else if (visualizationData && selectedCluster !== null && selectedCluster !== -1) {
+        // Cluster mode - label entire cluster
+        const clusterChips = visualizationData.points
+          .filter(p => p.clusterId === selectedCluster && !isChipInNoise(p.filename))
+          .map(p => p.filename);
 
-      if (visualizationData) {
-        const updatedClusters = [...visualizationData.clusters];
+        // Apply label through session context (this creates new cluster ID or reuses existing)
+        labelCluster(selectedCluster, newLabel, clusterChips);
 
-        if (selectedCluster !== null) {
-          // Update cluster label
-          const clusterIndex = updatedClusters.findIndex(c => c.id === selectedCluster);
-          if (clusterIndex !== -1) {
-            updatedClusters[clusterIndex] = {
-              ...updatedClusters[clusterIndex],
-              label: newLabel
+        // Update cluster state to labeled
+        setClusterState(selectedCluster, ClusterState.LABELED);
+
+        // Remove labeled points from visualization (they're now finished)
+        const remainingPoints = visualizationData.points.filter(
+          p => !(p.clusterId === selectedCluster && !isChipInNoise(p.filename))
+        );
+
+        // Update clusters - remove the labeled cluster or reduce its size
+        const updatedClusters = visualizationData.clusters.map(cluster => {
+          if (cluster.id === selectedCluster) {
+            const remainingSize = remainingPoints.filter(p => p.clusterId === selectedCluster).length;
+            if (remainingSize === 0) {
+              return null; // Mark for removal
+            }
+            return {
+              ...cluster,
+              size: remainingSize
             };
           }
-        }
+          return cluster;
+        }).filter(cluster => cluster !== null) as Cluster[];
 
         setVisualizationData({
           ...visualizationData,
+          points: remainingPoints,
           clusters: updatedClusters
         });
+        
+        message.success(`Applied label "${newLabel}" to cluster ${selectedCluster} (${clusterChips.length} chips)`);
       }
 
-      message.success(`Applied label "${newLabel}" successfully`);
+      // Add to available labels if it's new
+      if (!availableLabels.includes(newLabel)) {
+        setAvailableLabels([...availableLabels, newLabel]);
+      }
+
       setLabelModalVisible(false);
       setNewLabel('');
+      setSelectedCluster(null);
+      setSelectedPoints([]);
+      setChipViewerVisible(false);
+      setIsSearchMode(false);
     } catch (error) {
       console.error('Error applying label:', error);
       message.error('Failed to apply label');
@@ -334,9 +441,53 @@ const ClusterExplorer: React.FC = () => {
     // This would involve an API call to merge clusters
   };
 
-  const handleDeleteSelection = () => {
-    message.info('Delete selection functionality would be implemented here');
-    // This would involve an API call to remove points from the dataset
+  const handleRefineCluster = () => {
+    if (selectedCluster !== null) {
+      setClusterState(selectedCluster, ClusterState.REFINED);
+      message.success('Cluster marked as refined and ready for labeling');
+    }
+  };
+
+  const handleChipMoveToNoise = (chipId: string) => {
+    // Update selected points to remove chip moved to noise
+    setSelectedPoints(prev => prev.filter(id => id !== chipId));
+    
+    // Update visualization to move chip to noise cluster
+    if (visualizationData) {
+      const updatedPoints = visualizationData.points.map(point => {
+        if (point.filename === chipId) {
+          return { ...point, clusterId: -1 };
+        }
+        return point;
+      });
+      
+      setVisualizationData({
+        ...visualizationData,
+        points: updatedPoints
+      });
+    }
+  };
+
+  const getClusterStateLabel = (clusterId: number): string => {
+    const state = getClusterState(clusterId);
+    switch (state) {
+      case ClusterState.UNLABELED: return 'Unlabeled';
+      case ClusterState.UNDER_REVIEW: return 'Under Review';
+      case ClusterState.REFINED: return 'Refined';
+      case ClusterState.LABELED: return 'Labeled';
+      default: return 'Unknown';
+    }
+  };
+
+  const getClusterStateColor = (clusterId: number): string => {
+    const state = getClusterState(clusterId);
+    switch (state) {
+      case ClusterState.UNLABELED: return 'default';
+      case ClusterState.UNDER_REVIEW: return 'processing';
+      case ClusterState.REFINED: return 'warning';
+      case ClusterState.LABELED: return 'success';
+      default: return 'default';
+    }
   };
 
   const handleZoomIn = () => {
@@ -352,20 +503,33 @@ const ClusterExplorer: React.FC = () => {
   };
 
   const handleSearch = (value: string) => {
-    if (!visualizationData) return;
+    if (!visualizationData || !value.trim()) {
+      setIsSearchMode(false);
+      setSearchText('');
+      handlePointSelection([]);
+      return;
+    }
 
+    setSearchText(value); // Store the search text for display
     const searchLower = value.toLowerCase();
     const matchingPoints = visualizationData.points
       .filter(point =>
         point.filename.toLowerCase().includes(searchLower) ||
         point.description.toLowerCase().includes(searchLower)
       )
-      .map(point => point.id);
+      .map(point => point.filename); // Use filename as the ID
 
     if (matchingPoints.length > 0) {
-      handlePointSelection(matchingPoints);
+      setIsSearchMode(true);
+      setSelectedCluster(null); // Clear cluster selection in search mode
+      setSelectedPoints(matchingPoints);
+      setChipViewerVisible(true);
+      message.info(`Found ${matchingPoints.length} matching chips`);
     } else {
-      handlePointSelection([]);
+      setIsSearchMode(false);
+      setSelectedPoints([]);
+      setChipViewerVisible(false);
+      message.warning('No chips found matching your search');
     }
   };
 
@@ -421,6 +585,9 @@ const ClusterExplorer: React.FC = () => {
         </Button>
         <Title level={2}>{project.name} - Cluster Explorer</Title>
       </div>
+
+      {/* Session Progress Tracker */}
+      <SessionProgressTracker />
 
       <Tabs defaultActiveKey="visualization" className="cvat-cluster-explorer-tabs">
         <TabPane tab="Visualization" key="visualization">
@@ -542,14 +709,14 @@ const ClusterExplorer: React.FC = () => {
                       Merge
                     </Button>
                   </Tooltip>
-                  <Tooltip title="Delete selected points">
+                  <Tooltip title="Mark cluster as refined">
                     <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={handleDeleteSelection}
-                      disabled={selectedPoints.length === 0}
+                      type="primary"
+                      icon={<SaveOutlined />}
+                      onClick={handleRefineCluster}
+                      disabled={selectedCluster === null || getClusterState(selectedCluster || -1) === ClusterState.LABELED}
                     >
-                      Delete
+                      Refine
                     </Button>
                   </Tooltip>
                 </div>
@@ -613,14 +780,15 @@ const ClusterExplorer: React.FC = () => {
                     </div>
                   </div>
 
-                  <Title level={4}>Clusters</Title>
+                  {/* Active Clusters */}
+                  <Title level={4}>Active Clusters (Unlabeled)</Title>
                   <div className="cvat-cluster-explorer-clusters">
                     <table className="cvat-cluster-explorer-clusters-table">
                       <thead>
                         <tr>
                           <th>ID</th>
                           <th>Size</th>
-                          <th>Label</th>
+                          <th>State</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -637,11 +805,9 @@ const ClusterExplorer: React.FC = () => {
                               <td>{cluster.id}</td>
                               <td>{cluster.size}</td>
                               <td>
-                                {cluster.label ? (
-                                  <Tag color="blue">{cluster.label}</Tag>
-                                ) : (
-                                  <Tag color="gray">Unlabeled</Tag>
-                                )}
+                                <Tag color={getClusterStateColor(cluster.id)}>
+                                  {getClusterStateLabel(cluster.id)}
+                                </Tag>
                               </td>
                               <td>
                                 <Space>
@@ -670,6 +836,53 @@ const ClusterExplorer: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Finished/Labeled Clusters */}
+                  {sessionState.session && sessionState.session.clusterLabels.size > 0 && (
+                    <>
+                      <Divider />
+                      <Title level={4}>Labeled Clusters (Finished)</Title>
+                      <div className="cvat-cluster-explorer-clusters">
+                        <table className="cvat-cluster-explorer-clusters-table">
+                          <thead>
+                            <tr>
+                              <th>Cluster ID</th>
+                              <th>Label</th>
+                              <th>Chip Count</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from(sessionState.session.clusterLabels.entries())
+                              .sort((a, b) => {
+                                // Count chips in each labeled cluster
+                                const aCount = Array.from(sessionState.session!.chipClusterMapping.values())
+                                  .filter(clusterId => clusterId === a[0]).length;
+                                const bCount = Array.from(sessionState.session!.chipClusterMapping.values())
+                                  .filter(clusterId => clusterId === b[0]).length;
+                                return bCount - aCount;
+                              })
+                              .map(([clusterId, label]) => {
+                                const chipCount = Array.from(sessionState.session!.chipClusterMapping.values())
+                                  .filter(id => id === clusterId).length;
+                                return (
+                                  <tr key={clusterId}>
+                                    <td>{clusterId}</td>
+                                    <td>
+                                      <Tag color="green">{label}</Tag>
+                                    </td>
+                                    <td>{chipCount}</td>
+                                    <td>
+                                      <Tag color="success">Completed</Tag>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <Empty description="Run clustering to see analysis" />
@@ -760,29 +973,45 @@ const ClusterExplorer: React.FC = () => {
         )}
       </Modal> */}
 
-      {/* Show chip grid for selected cluster */}
-      {selectedCluster !== null && visualizationData && (
-        <div className="cvat-cluster-chip-grid">
-          {selectedPoints.map(pointId => {
-            const point = visualizationData.points.find(p => p.id === pointId);
-            if (!point) return null;
-
-            return (
-              <div key={point.id} className="cvat-cluster-chip">
-                <Image
-                  src={point.imageUrl}
-                  alt={point.filename}
-                  preview={false}
-                />
-                <div className="cvat-cluster-chip-info">
-                  <div>Filename: {point.filename}</div>
-                  <div>Cluster: {point.clusterId}</div>
-                  <div>Description: {point.description}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Enhanced Chip Viewer for selected cluster or search results */}
+      {chipViewerVisible && selectedPoints.length > 0 && (
+        <Card 
+          title={
+            isSearchMode 
+              ? `Search Results (${selectedPoints.length} chips)` 
+              : selectedCluster !== null 
+                ? `Cluster ${selectedCluster} - ${getClusterStateLabel(selectedCluster)}` 
+                : `Selected Chips (${selectedPoints.length})`
+          } 
+          style={{ marginTop: 16 }}
+        >
+          {selectedCluster !== null && !isSearchMode && (
+            <div style={{ marginBottom: 16 }}>
+              <Tag color={getClusterStateColor(selectedCluster)}>
+                {getClusterStateLabel(selectedCluster)}
+              </Tag>
+              {getClusterLabel(selectedCluster) && (
+                <Tag color="blue" style={{ marginLeft: 8 }}>
+                  {getClusterLabel(selectedCluster)}
+                </Tag>
+              )}
+            </div>
+          )}
+          {isSearchMode && (
+            <div style={{ marginBottom: 16 }}>
+              <Tag color="orange">Search Mode</Tag>
+              <Text type="secondary" style={{ marginLeft: 8 }}>
+                Showing chips matching: "{searchText}"
+              </Text>
+            </div>
+          )}
+          <ChipViewer
+            projectId={parseInt(projectId)}
+            chipIds={selectedPoints}
+            clusterId={selectedCluster || -1}
+            onChipMoveToNoise={handleChipMoveToNoise}
+          />
+        </Card>
       )}
     </div>
   );

@@ -51,6 +51,7 @@ export interface ClusteringRequest {
   min_samples: number;
   clustering_dims: number;
   reduction_method: string;
+  feature_type?: 'visual' | 'semantic' | 'both';
 }
 
 export interface ClusteringResponse {

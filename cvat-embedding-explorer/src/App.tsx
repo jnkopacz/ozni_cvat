@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Route, Switch, Link } from 'react-router-dom';
 import { Layout, Button } from 'antd';
 import ProjectsList from './components/ProjectsList/ProjectsList';
 import ClusterExplorer from './components/ClusterExplorer/ClusterExplorer';
+import { LabelingSessionProvider } from './contexts/LabelingSessionContext';
 import './styles/index.scss';
 
 const { Header, Content } = Layout;
@@ -22,21 +23,25 @@ const App: React.FC = () => {
                 style={{ marginLeft: '10px', height: '23px' }}
               />
             </div>
-            <Button
-              className="cvat-header-button"
-              type="link"
-              component={Link}
-              to="/"
-            >
-              Object Embedding Explorer
-            </Button>
+            <Link to="/">
+              <Button
+                className="cvat-header-button"
+                type="link"
+              >
+                Object Embedding Explorer
+              </Button>
+            </Link>
           </div>
         </Header>
         <Layout className="cvat-workspace">
           <Content className="cvat-content">
             <Switch>
               <Route path="/" exact component={ProjectsList} />
-              <Route path="/project/:projectId" component={ClusterExplorer} />
+              <Route path="/project/:projectId" render={() => (
+                <LabelingSessionProvider>
+                  <ClusterExplorer />
+                </LabelingSessionProvider>
+              )} />
             </Switch>
           </Content>
         </Layout>

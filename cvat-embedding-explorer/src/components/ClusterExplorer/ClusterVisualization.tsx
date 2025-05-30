@@ -149,8 +149,20 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                 colors[i * 3 + 2] = color.b;
             }
 
-            // Set alpha based on cluster selection
-            alphas[i] = selectedCluster === null || point.clusterId === selectedCluster ? 1.0 : 0.2;
+            // Set alpha based on cluster selection or individual point selection
+            const isPointSelected = selectedPoints.includes(point.id);
+            const isClusterSelected = selectedCluster !== null && point.clusterId === selectedCluster;
+            
+            if (selectedPoints.length > 0) {
+                // In search/point selection mode, highlight selected points
+                alphas[i] = isPointSelected ? 1.0 : 0.2;
+            } else if (selectedCluster !== null) {
+                // In cluster selection mode, highlight selected cluster
+                alphas[i] = isClusterSelected ? 1.0 : 0.2;
+            } else {
+                // No selection, show all points normally
+                alphas[i] = 1.0;
+            }
         });
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -221,7 +233,7 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
 
             cameraInitialized.current = true;
         }
-    }, [data, selectedCluster]); // Changed from selectedPoints to selectedCluster
+    }, [data, selectedCluster, selectedPoints]); // Include both selectedCluster and selectedPoints
 
     // Update click handler to select all points in the same cluster
     const handleClick = (event: MouseEvent) => {
@@ -233,13 +245,14 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
 
         const raycaster = new THREE.Raycaster();
         raycaster.params.Points!.threshold = 0.1;
-        raycaster.setFromCamera({ x, y }, camera);
+        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
 
         const intersects = raycaster.intersectObject(pointsRef.current);
 
         if (intersects.length > 0) {
             const index = intersects[0].index;
-            const clickedPoint = data.points[index];
+            if (index !== undefined) {
+                const clickedPoint = data.points[index];
             const clusterId = clickedPoint.clusterId;
 
             // Select all points in the same cluster
@@ -247,8 +260,9 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                 .filter(point => point.clusterId === clusterId)
                 .map(point => point.id);
 
-            onPointSelection(clusterPoints);
-            onClusterSelection(clusterId);
+                onPointSelection(clusterPoints);
+                onClusterSelection(clusterId);
+            }
         } else {
             onPointSelection([]);
             onClusterSelection(null);
@@ -265,19 +279,21 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
 
         const raycaster = new THREE.Raycaster();
         raycaster.params.Points!.threshold = 0.1;
-        raycaster.setFromCamera({ x, y }, camera);
+        raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
 
         const intersects = raycaster.intersectObject(pointsRef.current);
 
         if (intersects.length > 0) {
             const index = intersects[0].index;
-            const point = data.points[index];
-            setTooltip({
-                visible: true,
-                x: event.clientX,
-                y: event.clientY,
-                point
-            });
+            if (index !== undefined) {
+                const point = data.points[index];
+                setTooltip({
+                    visible: true,
+                    x: event.clientX,
+                    y: event.clientY,
+                    point
+                });
+            }
         } else {
             setTooltip(prev => prev?.visible ? { ...prev, visible: false } : prev);
         }
