@@ -63,6 +63,8 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     }>();
     const pointsRef = useRef<THREE.Points | null>(null);
     const cameraInitialized = useRef<boolean>(false);
+    const mouseDownPosition = useRef<{ x: number; y: number } | null>(null);
+    const isDragging = useRef<boolean>(false);
 
     // Initialize scene
     useEffect(() => {
@@ -246,11 +248,11 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             
-            // Position camera for better initial view
+            // Position camera for better initial view (closer to the data)
             camera.position.set(
-                center.x + maxDim * 1.2,
-                center.y + maxDim * 0.8,
-                center.z + maxDim * 1.5
+                center.x + maxDim * 0.6,
+                center.y + maxDim * 0.4,
+                center.z + maxDim * 0.8
             );
             camera.lookAt(center);
 
@@ -263,9 +265,31 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         }
     }, [data, selectedCluster, selectedPoints]); // Include both selectedCluster and selectedPoints
 
-    // Update click handler to select all points in the same cluster
-    const handleClick = (event: MouseEvent) => {
-        if (!containerRef.current || !data || !pointsRef.current) return;
+    // Handle mouse down to track drag start
+    const handleMouseDown = (event: MouseEvent) => {
+        mouseDownPosition.current = { x: event.clientX, y: event.clientY };
+        isDragging.current = false;
+    };
+
+    // Handle mouse move to detect dragging
+    const handleMouseMoveForDrag = (event: MouseEvent) => {
+        if (mouseDownPosition.current) {
+            const deltaX = Math.abs(event.clientX - mouseDownPosition.current.x);
+            const deltaY = Math.abs(event.clientY - mouseDownPosition.current.y);
+            const dragThreshold = 5; // pixels
+            
+            if (deltaX > dragThreshold || deltaY > dragThreshold) {
+                isDragging.current = true;
+            }
+        }
+    };
+
+    // Handle mouse up to process clicks (only if not dragging)
+    const handleMouseUp = (event: MouseEvent) => {
+        if (!containerRef.current || !data || !pointsRef.current || isDragging.current) {
+            mouseDownPosition.current = null;
+            return;
+        }
 
         const rect = containerRef.current.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -281,12 +305,12 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             const index = intersects[0].index;
             if (index !== undefined) {
                 const clickedPoint = data.points[index];
-            const clusterId = clickedPoint.clusterId;
+                const clusterId = clickedPoint.clusterId;
 
-            // Select all points in the same cluster
-            const clusterPoints = data.points
-                .filter(point => point.clusterId === clusterId)
-                .map(point => point.id);
+                // Select all points in the same cluster
+                const clusterPoints = data.points
+                    .filter(point => point.clusterId === clusterId)
+                    .map(point => point.id);
 
                 onPointSelection(clusterPoints);
                 onClusterSelection(clusterId);
@@ -295,6 +319,8 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             onPointSelection([]);
             onClusterSelection(null);
         }
+
+        mouseDownPosition.current = null;
     };
 
     // Handle point hover
@@ -331,12 +357,20 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         const container = containerRef.current;
         if (!container) return;
 
-        container.addEventListener('click', handleClick);
-        container.addEventListener('mousemove', handleMouseMove);
+        // Combine mouse move handlers
+        const combinedMouseMove = (event: MouseEvent) => {
+            handleMouseMoveForDrag(event);
+            handleMouseMove(event);
+        };
+
+        container.addEventListener('mousedown', handleMouseDown);
+        container.addEventListener('mousemove', combinedMouseMove);
+        container.addEventListener('mouseup', handleMouseUp);
 
         return () => {
-            container.removeEventListener('click', handleClick);
-            container.removeEventListener('mousemove', handleMouseMove);
+            container.removeEventListener('mousedown', handleMouseDown);
+            container.removeEventListener('mousemove', combinedMouseMove);
+            container.removeEventListener('mouseup', handleMouseUp);
         };
     }, [data]);
 
@@ -382,4 +416,16 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                         color: 'white',
                         borderRadius: '4px',
                         padding: '8px',
-                        boxShadow: '0 2p
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                        zIndex: 1000,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {renderTooltip(tooltip.point)}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default ClusterVisualization;
