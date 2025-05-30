@@ -154,18 +154,18 @@ Format the response as valid JSON only, no additional text."""
 
     def suggest_label_for_chips(self, project_id: int, chip_descriptions: List[str], existing_labels: List[str] = None) -> str:
         """Use LLM to suggest an appropriate label based on chip descriptions
-        
+
         Args:
             project_id: The ID of the project to get context from
             chip_descriptions: List of text descriptions for the chips (max 10)
             existing_labels: List of existing labels from the UI session (optional)
-            
+
         Returns:
             Suggested label as a string
         """
         # Limit to 10 descriptions for performance
         descriptions = chip_descriptions[:10]
-        
+
         # Use provided existing labels or fall back to project labels
         if existing_labels is None:
             try:
@@ -174,11 +174,11 @@ Format the response as valid JSON only, no additional text."""
             except Exception as e:
                 print(f"Warning: Could not get existing labels for project {project_id}: {e}")
                 existing_labels = []
-        
+
         # Construct prompt for label suggestion
         descriptions_text = "\n".join([f"- {desc}" for desc in descriptions])
         existing_labels_text = ", ".join(existing_labels) if existing_labels else "No existing labels"
-        
+
         prompt = f"""You are an expert in computer vision and machine learning annotation. Based on the following image descriptions, suggest a single, concise label that best represents what these images contain.
 
 Image descriptions:
@@ -187,29 +187,29 @@ Image descriptions:
 Existing labels in this project: {existing_labels_text}
 
 Guidelines:
-1. Provide a single, clear label (1-3 words maximum)
+1. Provide a single, clear label (1-3 words maximum). No parentheses. Spell out all acronyms.
 2. Use consistent terminology with existing labels when possible
 3. Focus on the most prominent or common feature across the descriptions
 4. Use standard computer vision terminology
 5. Be specific but not overly technical
 
 Respond with only the suggested label, no additional text or explanation."""
-        
+
         try:
             response = self.ollama_client.generate(
                 model=LABEL_SUGGESTION_MODEL,
                 prompt=prompt
             )
-            
+
             # Clean up the response - remove any extra whitespace or quotes
             suggested_label = response.response.strip().strip('"').strip("'")
-            
+
             # Ensure it's not empty and reasonable length
             if not suggested_label or len(suggested_label) > 50:
                 return "Unknown"
-                
+
             return suggested_label
-            
+
         except Exception as e:
             print(f"Error generating label suggestion: {e}")
             return "Unknown"

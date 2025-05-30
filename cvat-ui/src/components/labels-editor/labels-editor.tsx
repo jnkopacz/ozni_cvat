@@ -491,7 +491,7 @@ class LabelsEditorComponent extends React.PureComponent<
                     label: (
                         <span>
                             <PieChartOutlined />
-                            <Text>Explore</Text>
+                            <Text>COMbINE: Dataset Audit</Text>
                         </span>
                     ),
                     children: (
@@ -508,7 +508,7 @@ class LabelsEditorComponent extends React.PureComponent<
                     label: (
                         <span>
                             <ClusterOutlined />
-                            <Text>COMBINE</Text>
+                            <Text>COMbINE: Label Synthesis</Text>
                         </span>
                     ),
                     children: (

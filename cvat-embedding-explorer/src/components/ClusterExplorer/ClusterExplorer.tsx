@@ -1070,4 +1070,11 @@ const ClusterExplorer: React.FC = () => {
                 ])
               ) : undefined
             }
-   
+          />
+        </Card>
+      )}
+    </div>
+  );
+};
+
+export default ClusterExplorer;

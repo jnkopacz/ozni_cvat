@@ -63,11 +63,17 @@ export const api = {
   },
 
   // Label suggestion endpoint
-  suggestLabel: async (projectId: number, chipDescriptions: string[]) => {
-    const response = await axios.post(`${API_BASE_URL}/suggest-label`, {
+  suggestLabel: async (projectId: number, chipDescriptions: string[], existingLabels?: string[]) => {
+    const requestData: any = {
       project_id: projectId,
       chip_descriptions: chipDescriptions
-    });
+    };
+    
+    if (existingLabels && existingLabels.length > 0) {
+      requestData.existing_labels = existingLabels;
+    }
+    
+    const response = await axios.post(`${API_BASE_URL}/suggest-label`, requestData);
     return response.data;
   }
 };
