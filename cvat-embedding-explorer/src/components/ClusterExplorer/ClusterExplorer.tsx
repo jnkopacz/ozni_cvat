@@ -141,7 +141,7 @@ const ClusterExplorer: React.FC = () => {
               min_samples: 5,
               clustering_dims: 5,
               reduction_method: 'umap',
-              display_dims: 2,
+              display_dims: 3,
               feature_type: 'both'
             });
 
@@ -602,7 +602,7 @@ const ClusterExplorer: React.FC = () => {
                   min_samples: 5,
                   clustering_dims: 5,
                   reduction_method: 'umap',
-                  display_dims: 2,
+                  display_dims: 3,
                   feature_type: 'both'
                 }}
                 onFinish={handleRunClusteringSubmit}

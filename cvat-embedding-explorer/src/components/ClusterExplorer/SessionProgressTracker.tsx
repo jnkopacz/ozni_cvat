@@ -65,15 +65,21 @@ const SessionProgressTracker: React.FC = () => {
       </div>
 
       <div className="cvat-session-progress-main">
-        <Progress
-          percent={stats.progressPercentage}
-          status={stats.progressPercentage === 100 ? 'success' : 'active'}
-          strokeColor={{
-            '0%': '#108ee9',
-            '100%': '#87d068',
-          }}
-          format={(percent) => `${stats.labeledChips}/${stats.totalChips} (${percent}%)`}
-        />
+        <div className="cvat-session-progress-bar-container">
+          <Progress
+            percent={stats.progressPercentage}
+            status={stats.progressPercentage === 100 ? 'success' : 'active'}
+            strokeColor={{
+              '0%': '#108ee9',
+              '100%': '#87d068',
+            }}
+            showInfo={false}
+          />
+          <div className="cvat-session-progress-text">
+            <Text strong>{stats.labeledChips}/{stats.totalChips}</Text>
+            <Text type="secondary">({stats.progressPercentage}%)</Text>
+          </div>
+        </div>
       </div>
 
       <Row gutter={16} className="cvat-session-progress-stats">

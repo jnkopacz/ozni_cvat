@@ -75,11 +75,11 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         // Configure renderer
         renderer.setSize(width, height);
         renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setClearColor(0x1a1a1a); // Dark gray background
+        renderer.setClearColor(0xf0f0f0); // Light background to match theme
         container.appendChild(renderer.domElement);
 
-        // Add grid
-        const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x333333);
+        // Add grid with light theme colors
+        const gridHelper = new THREE.GridHelper(10, 10, 0xc3c3c3, 0xd9d9d9);
         scene.add(gridHelper);
 
         // Configure camera
@@ -131,15 +131,31 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     useEffect(() => {
         if (!data || !data.points.length) return;
 
+        // Normalize coordinates to improve scaling
+        const xs = data.points.map(p => p.x);
+        const ys = data.points.map(p => p.y);
+        const zs = data.points.map(p => p.z || 0);
+        
+        const xMin = Math.min(...xs), xMax = Math.max(...xs);
+        const yMin = Math.min(...ys), yMax = Math.max(...ys);
+        const zMin = Math.min(...zs), zMax = Math.max(...zs);
+        
+        const xRange = xMax - xMin || 1;
+        const yRange = yMax - yMin || 1;
+        const zRange = zMax - zMin || 1;
+        
+        // Scale to fit within a reasonable range (-5 to 5)
+        const scale = 8;
+
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(data.points.length * 3);
         const colors = new Float32Array(data.points.length * 3);
         const alphas = new Float32Array(data.points.length);
 
         data.points.forEach((point, i) => {
-            positions[i * 3] = point.x;
-            positions[i * 3 + 1] = point.y;
-            positions[i * 3 + 2] = point.z || 0;
+            positions[i * 3] = ((point.x - xMin) / xRange - 0.5) * scale;
+            positions[i * 3 + 1] = ((point.y - yMin) / yRange - 0.5) * scale;
+            positions[i * 3 + 2] = ((point.z || 0) - zMin) / zRange * scale - scale/2;
 
             const cluster = data.clusters.find(c => c.id === point.clusterId);
             if (cluster) {
@@ -169,7 +185,7 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
 
-        // Update shader material to handle alpha
+        // Update shader material with clean, appropriately sized points
         const material = new THREE.ShaderMaterial({
             vertexShader: `
                 attribute vec3 color;
@@ -181,7 +197,8 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                     vAlpha = alpha;
                     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                     gl_Position = projectionMatrix * mvPosition;
-                    gl_PointSize = 1.0 * (100.0 / -mvPosition.z);
+                    // Appropriately sized points with distance-based scaling
+                    gl_PointSize = max(2.0, 4.0 * (30.0 / -mvPosition.z));
                 }
             `,
             fragmentShader: `
@@ -191,7 +208,10 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                     vec2 center = gl_PointCoord - vec2(0.5);
                     float dist = length(center);
                     if (dist > 0.5) discard;
-                    float alpha = vAlpha * (1.0 - smoothstep(0.45, 0.5, dist));
+                    
+                    // Clean circular points with smooth edges
+                    float alpha = vAlpha * (1.0 - smoothstep(0.4, 0.5, dist));
+                    
                     gl_FragColor = vec4(vColor, alpha);
                 }
             `,
@@ -222,8 +242,13 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
-            camera.position.copy(center);
-            camera.position.z += maxDim * 2;
+            
+            // Position camera for better initial view
+            camera.position.set(
+                center.x + maxDim * 1.2,
+                center.y + maxDim * 0.8,
+                center.z + maxDim * 1.5
+            );
             camera.lookAt(center);
 
             if (controls) {
