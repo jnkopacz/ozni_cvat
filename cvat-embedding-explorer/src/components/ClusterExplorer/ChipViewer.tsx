@@ -121,10 +121,6 @@ const ChipViewer: React.FC<ChipViewerProps> = ({
     <div className="cvat-chip-viewer">
       {/* Active Chips */}
       <div className="cvat-chip-viewer-section">
-        <div className="cvat-chip-viewer-section-header">
-          <Text strong>Cluster Chips ({activeChips.length})</Text>
-          <Text type="secondary">Click X to move chips to noise cluster</Text>
-        </div>
         <div className="cvat-chip-viewer-grid">
           <Row gutter={[16, 16]}>
             {activeChips.map(chip => (
@@ -174,10 +170,6 @@ const ChipViewer: React.FC<ChipViewerProps> = ({
       {/* Noise Chips */}
       {noiseChips.length > 0 && (
         <div className="cvat-chip-viewer-section cvat-chip-viewer-excluded">
-          <div className="cvat-chip-viewer-section-header">
-            <Text strong>Moved to Noise Cluster ({noiseChips.length})</Text>
-            <Text type="secondary">These chips are now in the noise cluster (-1)</Text>
-          </div>
           <div className="cvat-chip-viewer-grid">
             <Row gutter={[16, 16]}>
               {noiseChips.map(chip => (

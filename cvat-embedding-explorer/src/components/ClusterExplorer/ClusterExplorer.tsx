@@ -228,17 +228,9 @@ const ClusterExplorer: React.FC = () => {
         };
       });
 
-      // Filter out finished chips from visualization and update noise chips
-      const points = allPoints.filter(point => !isChipFinished(point.filename)).map(point => {
-        // Check if chip has been moved to noise cluster
-        if (isChipInNoise(point.filename)) {
-          return {
-            ...point,
-            clusterId: -1 // Move to noise cluster
-          };
-        }
-        return point;
-      });
+      // Filter out finished chips from visualization
+      // Since we cleared the noise cluster, all remaining chips should use their new cluster assignments
+      const points = allPoints.filter(point => !isChipFinished(point.filename));
 
       setVisualizationData({
         points, // Only show unlabeled points in main visualization
@@ -680,47 +672,17 @@ const ClusterExplorer: React.FC = () => {
               </div>
 
               <div className="cvat-cluster-explorer-visualization">
-              <div className="cvat-cluster-visualization-toolbar">
-                <div className="cvat-cluster-visualization-actions">
+                {/* Search bar above the 3D plot */}
+                <div className="cvat-cluster-search-container" style={{ marginBottom: 16 }}>
                   <Search
                     placeholder="Search by filename or description"
                     allowClear
                     enterButton
-                    style={{ width: 300, marginRight: 16 }}
+                    style={{ width: 400 }}
                     onSearch={handleSearch}
                     onChange={(e) => setSearchText(e.target.value)}
                   />
-                  <Tooltip title="Label selected points or cluster">
-                    <Button
-                      icon={<TagOutlined />}
-                      onClick={handleLabelSelection}
-                      disabled={selectedPoints.length === 0 && selectedCluster === null}
-                    >
-                      Label
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="Merge selected clusters">
-                    <Button
-                      icon={<MergeCellsOutlined />}
-                      onClick={handleMergeClusters}
-                      disabled={selectedCluster === null}
-                    >
-                      Merge
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="Mark cluster as refined">
-                    <Button
-                      type="primary"
-                      icon={<SaveOutlined />}
-                      onClick={handleRefineCluster}
-                      disabled={selectedCluster === null || getClusterState(selectedCluster || -1) === ClusterState.LABELED}
-                    >
-                      Refine
-                    </Button>
-                  </Tooltip>
                 </div>
-
-              </div>
 
               {clusteringLoading ? (
                 <div className="cvat-cluster-explorer-loading">
@@ -745,7 +707,7 @@ const ClusterExplorer: React.FC = () => {
           </Card>
         </TabPane>
 
-        <TabPane tab="Analysis" key="analysis">
+        <TabPane tab="Summary" key="analysis">
           <Card className="cvat-cluster-explorer-card">
             <div className="cvat-cluster-explorer-analysis">
               {visualizationData ? (
@@ -953,6 +915,8 @@ const ClusterExplorer: React.FC = () => {
         onCancel={() => setLabelModalVisible(false)}
         okText="Apply"
         cancelText="Cancel"
+        centered
+        width={500}
       >
         <div className="cvat-cluster-explorer-label-modal">
           <Paragraph>
@@ -1030,34 +994,30 @@ const ClusterExplorer: React.FC = () => {
       {chipViewerVisible && selectedPoints.length > 0 && (
         <Card 
           title={
-            isSearchMode 
-              ? `Search Results (${selectedPoints.length} chips)` 
-              : selectedCluster !== null 
-                ? `Cluster ${selectedCluster} - ${getClusterStateLabel(selectedCluster)}` 
-                : `Selected Chips (${selectedPoints.length})`
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>
+                {isSearchMode 
+                  ? `Search Results (${selectedPoints.length} chips)` 
+                  : selectedCluster !== null 
+                    ? `Cluster ${selectedCluster} - ${getClusterStateLabel(selectedCluster)} (${selectedPoints.length} chips)` 
+                    : `Selected Chips (${selectedPoints.length})`
+                }
+              </span>
+              <Tooltip title="Label selected points or cluster">
+                <Button
+                  type="primary"
+                  icon={<TagOutlined />}
+                  onClick={handleLabelSelection}
+                  disabled={selectedPoints.length === 0 && selectedCluster === null}
+                >
+                  Label
+                </Button>
+              </Tooltip>
+            </div>
           } 
           style={{ marginTop: 16 }}
         >
-          {selectedCluster !== null && !isSearchMode && (
-            <div style={{ marginBottom: 16 }}>
-              <Tag color={getClusterStateColor(selectedCluster)}>
-                {getClusterStateLabel(selectedCluster)}
-              </Tag>
-              {getClusterLabel(selectedCluster) && (
-                <Tag color="blue" style={{ marginLeft: 8 }}>
-                  {getClusterLabel(selectedCluster)}
-                </Tag>
-              )}
-            </div>
-          )}
-          {isSearchMode && (
-            <div style={{ marginBottom: 16 }}>
-              <Tag color="orange">Search Mode</Tag>
-              <Text type="secondary" style={{ marginLeft: 8 }}>
-                Showing chips matching: "{searchText}"
-              </Text>
-            </div>
-          )}
+
           <ChipViewer
             projectId={parseInt(projectId)}
             chipIds={selectedPoints}
@@ -1079,3 +1039,4 @@ const ClusterExplorer: React.FC = () => {
 };
 
 export default ClusterExplorer;
+ 
