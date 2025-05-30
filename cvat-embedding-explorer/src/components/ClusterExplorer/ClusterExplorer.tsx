@@ -793,21 +793,73 @@ const ClusterExplorer: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
+                        {/* Regular clusters */}
                         {visualizationData.clusters
                           .filter(cluster => cluster.id !== -1)
-                          .sort((a, b) => b.size - a.size)
-                          .map(cluster => (
+                          .sort((a, b) => {
+                            // Calculate actual current size based on visualization data
+                            const aCurrentSize = visualizationData.points.filter(p => p.clusterId === a.id).length;
+                            const bCurrentSize = visualizationData.points.filter(p => p.clusterId === b.id).length;
+                            return bCurrentSize - aCurrentSize;
+                          })
+                          .filter(cluster => {
+                            // Only show clusters that still have points
+                            const currentSize = visualizationData.points.filter(p => p.clusterId === cluster.id).length;
+                            return currentSize > 0;
+                          })
+                          .map(cluster => {
+                            const currentSize = visualizationData.points.filter(p => p.clusterId === cluster.id).length;
+                            return (
+                              <tr
+                                key={cluster.id}
+                                className={selectedCluster === cluster.id ? 'selected' : ''}
+                                onClick={() => handleClusterSelection(cluster.id)}
+                              >
+                                <td>{cluster.id}</td>
+                                <td>{currentSize}</td>
+                                <td>
+                                  <Tag color={getClusterStateColor(cluster.id)}>
+                                    {getClusterStateLabel(cluster.id)}
+                                  </Tag>
+                                </td>
+                                <td>
+                                  <Space>
+                                    <Button
+                                      size="small"
+                                      icon={<EyeOutlined />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClusterSelection(cluster.id);
+                                        handleViewChips();
+                                      }}
+                                    />
+                                    <Button
+                                      size="small"
+                                      icon={<TagOutlined />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClusterSelection(cluster.id);
+                                        handleLabelSelection();
+                                      }}
+                                    />
+                                  </Space>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        {/* Noise cluster (-1) */}
+                        {(() => {
+                          const noiseSize = visualizationData.points.filter(p => p.clusterId === -1).length;
+                          return noiseSize > 0 ? (
                             <tr
-                              key={cluster.id}
-                              className={selectedCluster === cluster.id ? 'selected' : ''}
-                              onClick={() => handleClusterSelection(cluster.id)}
+                              key={-1}
+                              className={selectedCluster === -1 ? 'selected' : ''}
+                              onClick={() => handleClusterSelection(-1)}
                             >
-                              <td>{cluster.id}</td>
-                              <td>{cluster.size}</td>
+                              <td>-1 (Noise)</td>
+                              <td>{noiseSize}</td>
                               <td>
-                                <Tag color={getClusterStateColor(cluster.id)}>
-                                  {getClusterStateLabel(cluster.id)}
-                                </Tag>
+                                <Tag color="orange">Noise</Tag>
                               </td>
                               <td>
                                 <Space>
@@ -816,7 +868,7 @@ const ClusterExplorer: React.FC = () => {
                                     icon={<EyeOutlined />}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleClusterSelection(cluster.id);
+                                      handleClusterSelection(-1);
                                       handleViewChips();
                                     }}
                                   />
@@ -825,14 +877,15 @@ const ClusterExplorer: React.FC = () => {
                                     icon={<TagOutlined />}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleClusterSelection(cluster.id);
+                                      handleClusterSelection(-1);
                                       handleLabelSelection();
                                     }}
                                   />
                                 </Space>
                               </td>
                             </tr>
-                          ))}
+                          ) : null;
+                        })()}
                       </tbody>
                     </table>
                   </div>
