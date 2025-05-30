@@ -357,7 +357,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    // margin-bottom: 16px;
+    margin-top: 16px;
   }
   
   .cvat-session-progress-main {
@@ -394,7 +395,7 @@
   }
   
   .cvat-session-progress-stats {
-    margin-bottom: 16px;
+    // margin-bottom: 16px;
   }
   
   .cvat-session-progress-labels {
