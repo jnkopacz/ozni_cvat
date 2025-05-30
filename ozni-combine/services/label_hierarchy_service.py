@@ -152,12 +152,13 @@ Format the response as valid JSON only, no additional text."""
 
         return result
 
-    def suggest_label_for_chips(self, project_id: int, chip_descriptions: List[str]) -> str:
+    def suggest_label_for_chips(self, project_id: int, chip_descriptions: List[str], existing_labels: List[str] = None) -> str:
         """Use LLM to suggest an appropriate label based on chip descriptions
         
         Args:
             project_id: The ID of the project to get context from
             chip_descriptions: List of text descriptions for the chips (max 10)
+            existing_labels: List of existing labels from the UI session (optional)
             
         Returns:
             Suggested label as a string
@@ -165,13 +166,14 @@ Format the response as valid JSON only, no additional text."""
         # Limit to 10 descriptions for performance
         descriptions = chip_descriptions[:10]
         
-        # Get existing project labels for context
-        try:
-            label_counts = self.get_project_labels(project_id)
-            existing_labels = list(label_counts.keys())
-        except Exception as e:
-            print(f"Warning: Could not get existing labels for project {project_id}: {e}")
-            existing_labels = []
+        # Use provided existing labels or fall back to project labels
+        if existing_labels is None:
+            try:
+                label_counts = self.get_project_labels(project_id)
+                existing_labels = list(label_counts.keys())
+            except Exception as e:
+                print(f"Warning: Could not get existing labels for project {project_id}: {e}")
+                existing_labels = []
         
         # Construct prompt for label suggestion
         descriptions_text = "\n".join([f"- {desc}" for desc in descriptions])
@@ -209,4 +211,5 @@ Respond with only the suggested label, no additional text or explanation."""
             return suggested_label
             
         except Exception as e:
-            print(f"Error generating label suggestion: {e
+            print(f"Error generating label suggestion: {e}")
+            return "Unknown"

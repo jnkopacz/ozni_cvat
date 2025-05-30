@@ -40,3 +40,5 @@ COMBINE_MODEL = "gemma3:27b" # or whatever Ollama model you want to use for hier
 #todo, try quen3:30b
 #todo, try llama3.3:70b
 #todo, try llama4:scout
+
+LABEL_SUGGESTION_MODEL = "llama3.2:3b"  # Model for label suggestion

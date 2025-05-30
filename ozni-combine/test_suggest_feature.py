@@ -21,10 +21,12 @@ def test_suggest_label():
         "Human figure in motion"
     ]
     
-    # Prepare request data
+    # Prepare request data with existing labels
+    existing_labels = ['Person', 'Vehicle', 'Building', 'Animal']
     request_data = {
         'project_id': TEST_PROJECT_ID,
-        'chip_descriptions': test_descriptions
+        'chip_descriptions': test_descriptions,
+        'existing_labels': existing_labels
     }
     
     print(f"Testing suggest label endpoint...")

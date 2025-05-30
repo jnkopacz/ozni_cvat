@@ -554,10 +554,15 @@ def suggest_label():
     
     project_id = data['project_id']
     chip_descriptions = data['chip_descriptions']
+    existing_labels = data.get('existing_labels', None)  # Optional parameter
     
     # Validate input
     if not isinstance(chip_descriptions, list) or len(chip_descriptions) == 0:
         return jsonify({"error": "chip_descriptions must be a non-empty list"}), 400
+    
+    # Validate existing_labels if provided
+    if existing_labels is not None and not isinstance(existing_labels, list):
+        return jsonify({"error": "existing_labels must be a list if provided"}), 400
     
     # Limit to 10 descriptions for performance
     if len(chip_descriptions) > 10:
@@ -566,13 +571,15 @@ def suggest_label():
     try:
         suggested_label = label_hierarchy_service.suggest_label_for_chips(
             int(project_id), 
-            chip_descriptions
+            chip_descriptions,
+            existing_labels
         )
         
         return jsonify({
             "project_id": project_id,
             "suggested_label": suggested_label,
-            "descriptions_count": len(chip_descriptions)
+            "descriptions_count": len(chip_descriptions),
+            "existing_labels_count": len(existing_labels) if existing_labels else 0
         })
         
     except Exception as e:

@@ -549,8 +549,8 @@ const ClusterExplorer: React.FC = () => {
         return;
       }
 
-      // Call the suggest label API
-      const response = await api.suggestLabel(parseInt(projectId), chipDescriptions);
+      // Call the suggest label API with existing labels
+      const response = await api.suggestLabel(parseInt(projectId), chipDescriptions, availableLabels);
       
       if (response.suggested_label) {
         setNewLabel(response.suggested_label);
@@ -1001,7 +1001,7 @@ const ClusterExplorer: React.FC = () => {
                   {suggestingLabel ? 'Suggesting...' : 'Suggest'}
                 </Button>
                 <Text type="secondary">
-                  Generate a suggested label
+                  AI will analyze selected chips and suggest a label based on existing labels
                 </Text>
               </Space>
             </Form.Item>
@@ -1070,12 +1070,4 @@ const ClusterExplorer: React.FC = () => {
                 ])
               ) : undefined
             }
-          />
-        </Card>
-      )}
-    </div>
-  );
-};
-
-export default ClusterExplorer;
-                                                                
+   
