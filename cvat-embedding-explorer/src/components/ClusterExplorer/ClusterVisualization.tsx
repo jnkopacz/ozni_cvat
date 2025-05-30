@@ -157,65 +157,68 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             positions[i * 3 + 1] = ((point.y - yMin) / yRange - 0.5) * scale;
             positions[i * 3 + 2] = ((point.z || 0) - zMin) / zRange * scale - scale/2;
 
-            const cluster = data.clusters.find(c => c.id === point.clusterId);
-            if (cluster) {
-                const color = new THREE.Color(cluster.color);
-                colors[i * 3] = color.r;
-                colors[i * 3 + 1] = color.g;
-                colors[i * 3 + 2] = color.b;
-            }
-
-            // Set alpha based on cluster selection or individual point selection
+            // Determine if this point should be highlighted
             const isPointSelected = selectedPoints.includes(point.id);
             const isClusterSelected = selectedCluster !== null && point.clusterId === selectedCluster;
-            
-            if (selectedPoints.length > 0) {
-                // In search/point selection mode, highlight selected points
-                alphas[i] = isPointSelected ? 1.0 : 0.2;
-            } else if (selectedCluster !== null) {
-                // In cluster selection mode, highlight selected cluster
-                alphas[i] = isClusterSelected ? 1.0 : 0.2;
+            const shouldHighlight = (selectedPoints.length > 0 && isPointSelected) || 
+                                  (selectedCluster !== null && isClusterSelected) ||
+                                  (selectedPoints.length === 0 && selectedCluster === null);
+
+            if (shouldHighlight) {
+                // Use original cluster color for highlighted points
+                const cluster = data.clusters.find(c => c.id === point.clusterId);
+                if (cluster) {
+                    const color = new THREE.Color(cluster.color);
+                    colors[i * 3] = color.r;
+                    colors[i * 3 + 1] = color.g;
+                    colors[i * 3 + 2] = color.b;
+                }
             } else {
-                // No selection, show all points normally
-                alphas[i] = 1.0;
+                // Use gray color for non-highlighted points (like Vue project)
+                const grayColor = { r: 0.7, g: 0.7, b: 0.7 };
+                colors[i * 3] = grayColor.r;
+                colors[i * 3 + 1] = grayColor.g;
+                colors[i * 3 + 2] = grayColor.b;
             }
+
+            // Always use full alpha since we're using color changes instead
+            alphas[i] = 1.0;
         });
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
 
-        // Update shader material with clean, appropriately sized points
-        const material = new THREE.ShaderMaterial({
-            vertexShader: `
-                attribute vec3 color;
-                attribute float alpha;
-                varying vec3 vColor;
-                varying float vAlpha;
-                void main() {
-                    vColor = color;
-                    vAlpha = alpha;
-                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    gl_Position = projectionMatrix * mvPosition;
-                    // Appropriately sized points with distance-based scaling
-                    gl_PointSize = max(2.0, 4.0 * (30.0 / -mvPosition.z));
-                }
-            `,
-            fragmentShader: `
-                varying vec3 vColor;
-                varying float vAlpha;
-                void main() {
-                    vec2 center = gl_PointCoord - vec2(0.5);
-                    float dist = length(center);
-                    if (dist > 0.5) discard;
-                    
-                    // Clean circular points with smooth edges
-                    float alpha = vAlpha * (1.0 - smoothstep(0.4, 0.5, dist));
-                    
-                    gl_FragColor = vec4(vColor, alpha);
-                }
-            `,
+        // Create circle texture for clean points like the Vue project
+        const createCircleTexture = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            
+            const context = canvas.getContext('2d');
+            if (!context) {
+                throw new Error('Could not get 2D context from canvas');
+            }
+            
+            context.beginPath();
+            context.arc(32, 32, 30, 0, 2 * Math.PI);
+            context.fillStyle = '#ffffff';
+            context.fill();
+            
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        };
+
+        // Use PointsMaterial with circular texture like the Vue project
+        const material = new THREE.PointsMaterial({
+            size: 0.3, // Equivalent to pointSize * 0.1 from Vue project
+            vertexColors: true,
             transparent: true,
+            opacity: 0.6,
+            sizeAttenuation: true,
+            alphaTest: 0.5,
+            map: createCircleTexture()
         });
 
         // Create points
@@ -379,16 +382,4 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                         color: 'white',
                         borderRadius: '4px',
                         padding: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                        zIndex: 1000,
-                        pointerEvents: 'none',
-                    }}
-                >
-                    {renderTooltip(tooltip.point)}
-                </div>
-            )}
-        </div>
-    );
-};
-
-export default ClusterVisualization;
+                        boxShadow: '0 2p
