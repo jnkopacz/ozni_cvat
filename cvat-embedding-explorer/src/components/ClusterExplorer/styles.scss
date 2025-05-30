@@ -221,6 +221,11 @@
   }
 }
 
+.cvat-cluster-visualization-wrapper {
+  width: 100%;
+  position: relative;
+}
+
 .cvat-cluster-visualization-container {
   width: 100%;
   height: 500px; // Fixed height to match clustering settings area
@@ -236,6 +241,34 @@
     width: 100%;
     height: 100%;
     cursor: crosshair;
+  }
+}
+
+// Overlay styles for search bar and controls
+.cvat-cluster-visualization-search-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  pointer-events: auto;
+  
+  .ant-input-search {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+  }
+}
+
+.cvat-cluster-visualization-controls-overlay {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  pointer-events: auto;
+  display: flex;
+  gap: 8px;
+  
+  .ant-btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
 }
 

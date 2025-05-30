@@ -1,6 +1,7 @@
 // src/components/ClusterExplorer/ClusterVisualization.tsx
-import React, { useRef, useEffect, useState } from 'react';
-import { Empty, Image } from 'antd';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Empty, Image, Button, Tooltip, Input } from 'antd';
+import { SelectOutlined, DragOutlined } from '@ant-design/icons';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import './styles.scss';
@@ -39,7 +40,16 @@ interface ClusterVisualizationProps {
     selectedPoints: string[];
     selectedCluster: number | null;
     projectId: number;
+    onSearch?: (value: string) => void;
+    searchText?: string;
 }
+
+interface LassoPoint {
+    x: number;
+    y: number;
+}
+
+type SelectionMode = 'click' | 'lasso';
 
 const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     data,
@@ -48,7 +58,9 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     onClusterSelection,
     selectedPoints,
     selectedCluster,
-    projectId
+    projectId,
+    onSearch,
+    searchText
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [scene] = useState(() => new THREE.Scene());
@@ -65,6 +77,11 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     const cameraInitialized = useRef<boolean>(false);
     const mouseDownPosition = useRef<{ x: number; y: number } | null>(null);
     const isDragging = useRef<boolean>(false);
+    const [selectionMode, setSelectionMode] = useState<SelectionMode>('click');
+    const [isDrawingLasso, setIsDrawingLasso] = useState<boolean>(false);
+    const [lassoPath, setLassoPath] = useState<LassoPoint[]>([]);
+    const lassoCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const lassoContext = useRef<CanvasRenderingContext2D | null>(null);
 
     // Initialize scene
     useEffect(() => {
@@ -99,6 +116,19 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         orbitControls.dampingFactor = 0.05;
         setControls(orbitControls);
 
+        // Create lasso canvas overlay
+        const lassoCanvas = document.createElement('canvas');
+        lassoCanvas.style.position = 'absolute';
+        lassoCanvas.style.top = '0';
+        lassoCanvas.style.left = '0';
+        lassoCanvas.style.pointerEvents = 'none';
+        lassoCanvas.style.zIndex = '10';
+        lassoCanvas.width = width;
+        lassoCanvas.height = height;
+        container.appendChild(lassoCanvas);
+        lassoCanvasRef.current = lassoCanvas;
+        lassoContext.current = lassoCanvas.getContext('2d');
+
         // Animation loop
         const animate = () => {
             requestAnimationFrame(animate);
@@ -109,7 +139,12 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
 
         // Cleanup
         return () => {
-            container.removeChild(renderer.domElement);
+            if (container.contains(renderer.domElement)) {
+                container.removeChild(renderer.domElement);
+            }
+            if (lassoCanvasRef.current && container.contains(lassoCanvasRef.current)) {
+                container.removeChild(lassoCanvasRef.current);
+            }
             orbitControls.dispose();
         };
     }, []);
@@ -123,6 +158,12 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
             renderer.setSize(width, height);
+            
+            // Resize lasso canvas
+            if (lassoCanvasRef.current) {
+                lassoCanvasRef.current.width = width;
+                lassoCanvasRef.current.height = height;
+            }
         };
 
         window.addEventListener('resize', handleResize);
@@ -265,14 +306,126 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
         }
     }, [data, selectedCluster, selectedPoints]); // Include both selectedCluster and selectedPoints
 
+    // Lasso selection functions
+    const isPointInPolygon = useCallback((point: { x: number; y: number }, polygon: LassoPoint[]): boolean => {
+        if (polygon.length < 3) return false;
+        
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            if (((polygon[i].y > point.y) !== (polygon[j].y > point.y)) &&
+                (point.x < (polygon[j].x - polygon[i].x) * (point.y - polygon[i].y) / (polygon[j].y - polygon[i].y) + polygon[i].x)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }, []);
+
+    const getScreenPosition = useCallback((worldPosition: THREE.Vector3): { x: number; y: number } => {
+        const vector = worldPosition.clone();
+        vector.project(camera);
+        
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return { x: 0, y: 0 };
+        
+        return {
+            x: (vector.x * 0.5 + 0.5) * rect.width,
+            y: (vector.y * -0.5 + 0.5) * rect.height
+        };
+    }, [camera]);
+
+    const selectPointsInLasso = useCallback((lassoPoints: LassoPoint[]) => {
+        if (!data || !pointsRef.current || lassoPoints.length < 3) return;
+
+        const selectedPointIds: string[] = [];
+        const positions = pointsRef.current.geometry.attributes.position;
+        
+        for (let i = 0; i < data.points.length; i++) {
+            const worldPos = new THREE.Vector3(
+                positions.getX(i),
+                positions.getY(i),
+                positions.getZ(i)
+            );
+            
+            const screenPos = getScreenPosition(worldPos);
+            
+            if (isPointInPolygon(screenPos, lassoPoints)) {
+                selectedPointIds.push(data.points[i].id);
+            }
+        }
+        
+        if (selectedPointIds.length > 0) {
+            onPointSelection(selectedPointIds);
+            // Don't set cluster selection for lasso - it might span multiple clusters
+            onClusterSelection(null);
+        }
+    }, [data, isPointInPolygon, getScreenPosition, onPointSelection, onClusterSelection]);
+
+    const drawLasso = useCallback((points: LassoPoint[]) => {
+        const ctx = lassoContext.current;
+        if (!ctx || points.length < 2) return;
+        
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        
+        ctx.strokeStyle = '#1890ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.globalAlpha = 0.8;
+        
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        
+        // Close the path if we have enough points
+        if (points.length > 2) {
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(24, 144, 255, 0.1)';
+            ctx.fill();
+        }
+        
+        ctx.stroke();
+    }, []);
+
+    const clearLasso = useCallback(() => {
+        const ctx = lassoContext.current;
+        if (ctx) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        }
+        setLassoPath([]);
+    }, []);
+
     // Handle mouse down to track drag start
     const handleMouseDown = (event: MouseEvent) => {
+        if (!containerRef.current) return;
+        
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
         mouseDownPosition.current = { x: event.clientX, y: event.clientY };
         isDragging.current = false;
+        
+        if (selectionMode === 'lasso') {
+            setIsDrawingLasso(true);
+            setLassoPath([{ x, y }]);
+            
+            // Disable orbit controls during lasso drawing
+            if (controls) {
+                controls.enabled = false;
+            }
+        }
     };
 
     // Handle mouse move to detect dragging
     const handleMouseMoveForDrag = (event: MouseEvent) => {
+        if (!containerRef.current) return;
+        
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
         if (mouseDownPosition.current) {
             const deltaX = Math.abs(event.clientX - mouseDownPosition.current.x);
             const deltaY = Math.abs(event.clientY - mouseDownPosition.current.y);
@@ -282,11 +435,49 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
                 isDragging.current = true;
             }
         }
+        
+        // Handle lasso drawing
+        if (isDrawingLasso && selectionMode === 'lasso') {
+            setLassoPath(prev => {
+                const newPath = [...prev, { x, y }];
+                drawLasso(newPath);
+                return newPath;
+            });
+        }
     };
 
     // Handle mouse up to process clicks (only if not dragging)
     const handleMouseUp = (event: MouseEvent) => {
-        if (!containerRef.current || !data || !pointsRef.current || isDragging.current) {
+        if (!containerRef.current || !data || !pointsRef.current) {
+            mouseDownPosition.current = null;
+            return;
+        }
+        
+        // Handle lasso completion
+        if (isDrawingLasso && selectionMode === 'lasso') {
+            setIsDrawingLasso(false);
+            
+            // Re-enable orbit controls
+            if (controls) {
+                controls.enabled = true;
+            }
+            
+            // Select points within lasso
+            if (lassoPath.length > 2) {
+                selectPointsInLasso(lassoPath);
+            }
+            
+            // Clear lasso after a short delay
+            setTimeout(() => {
+                clearLasso();
+            }, 200);
+            
+            mouseDownPosition.current = null;
+            return;
+        }
+        
+        // Handle click selection (only if not dragging and in click mode)
+        if (isDragging.current || selectionMode !== 'click') {
             mouseDownPosition.current = null;
             return;
         }
@@ -325,7 +516,7 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
 
     // Handle point hover
     const handleMouseMove = (event: MouseEvent) => {
-        if (!containerRef.current || !data || !pointsRef.current) return;
+        if (!containerRef.current || !data || !pointsRef.current || isDrawingLasso) return;
 
         const rect = containerRef.current.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -372,7 +563,23 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
             container.removeEventListener('mousemove', combinedMouseMove);
             container.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [data]);
+    }, [data, selectionMode, isDrawingLasso, lassoPath, controls]);
+
+    // Handle escape key to cancel lasso
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && isDrawingLasso) {
+                setIsDrawingLasso(false);
+                clearLasso();
+                if (controls) {
+                    controls.enabled = true;
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isDrawingLasso, controls, clearLasso]);
 
     const renderTooltip = (point: Point) => (
         <div className="cvat-cluster-point-tooltip">
@@ -404,26 +611,74 @@ const ClusterVisualization: React.FC<ClusterVisualizationProps> = ({
     }
 
     return (
-        <div className="cvat-cluster-visualization-container" ref={containerRef}>
-            {tooltip?.visible && tooltip.point && (
-                <div
-                    className="cvat-cluster-visualization-tooltip"
-                    style={{
-                        position: 'fixed',
-                        left: tooltip.x + 10,
-                        top: tooltip.y + 10,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        color: 'white',
-                        borderRadius: '4px',
-                        padding: '8px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                        zIndex: 1000,
-                        pointerEvents: 'none',
-                    }}
-                >
-                    {renderTooltip(tooltip.point)}
+        <div className="cvat-cluster-visualization-wrapper">
+            <div 
+                className="cvat-cluster-visualization-container" 
+                ref={containerRef}
+                style={{ cursor: selectionMode === 'lasso' ? 'crosshair' : 'default' }}
+            >
+                {/* Search bar overlay */}
+                <div className="cvat-cluster-visualization-search-overlay">
+                    <Input.Search
+                        placeholder="Search by filename or description"
+                        allowClear
+                        enterButton
+                        style={{ width: 300 }}
+                        onSearch={onSearch}
+                        defaultValue={searchText}
+                    />
                 </div>
-            )}
+                
+                {/* Selection mode buttons overlay */}
+                <div className="cvat-cluster-visualization-controls-overlay">
+                    <Tooltip title="Click to select clusters">
+                        <Button
+                            type={selectionMode === 'click' ? 'primary' : 'default'}
+                            icon={<DragOutlined />}
+                            onClick={() => {
+                                setSelectionMode('click');
+                                clearLasso();
+                                if (controls) controls.enabled = true;
+                            }}
+                            size="small"
+                        >
+                            Click
+                        </Button>
+                    </Tooltip>
+                    <Tooltip title="Draw lasso to select multiple points">
+                        <Button
+                            type={selectionMode === 'lasso' ? 'primary' : 'default'}
+                            icon={<SelectOutlined />}
+                            onClick={() => {
+                                setSelectionMode('lasso');
+                                clearLasso();
+                            }}
+                            size="small"
+                        >
+                            Lasso
+                        </Button>
+                    </Tooltip>
+                </div>
+                {tooltip?.visible && tooltip.point && (
+                    <div
+                        className="cvat-cluster-visualization-tooltip"
+                        style={{
+                            position: 'fixed',
+                            left: tooltip.x + 10,
+                            top: tooltip.y + 10,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            color: 'white',
+                            borderRadius: '4px',
+                            padding: '8px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                            zIndex: 1000,
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        {renderTooltip(tooltip.point)}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

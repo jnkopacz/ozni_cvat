@@ -672,18 +672,6 @@ const ClusterExplorer: React.FC = () => {
               </div>
 
               <div className="cvat-cluster-explorer-visualization">
-                {/* Search bar above the 3D plot */}
-                <div className="cvat-cluster-search-container" style={{ marginBottom: 16 }}>
-                  <Search
-                    placeholder="Search by filename or description"
-                    allowClear
-                    enterButton
-                    style={{ width: 400 }}
-                    onSearch={handleSearch}
-                    onChange={(e) => setSearchText(e.target.value)}
-                  />
-                </div>
-
               {clusteringLoading ? (
                 <div className="cvat-cluster-explorer-loading">
                   <Spin size="large" />
@@ -698,6 +686,8 @@ const ClusterExplorer: React.FC = () => {
                   selectedPoints={selectedPoints}
                   selectedCluster={selectedCluster}
                   projectId={parseInt(projectId)}
+                  onSearch={handleSearch}
+                  searchText={searchText}
                 />
               ) : (
                 <Empty description="No visualization data available" />
