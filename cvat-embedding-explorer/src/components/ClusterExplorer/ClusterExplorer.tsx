@@ -592,95 +592,94 @@ const ClusterExplorer: React.FC = () => {
       <Tabs defaultActiveKey="visualization" className="cvat-cluster-explorer-tabs">
         <TabPane tab="Visualization" key="visualization">
           <Card className="cvat-cluster-explorer-card">
-            <div className="cvat-cluster-explorer-controls">
-              <Title level={4}>Clustering Settings</Title>
-              <Form
-                form={form}
-                layout="vertical"
-                initialValues={{
-                  min_cluster_size: 5,
-                  min_samples: 5,
-                  clustering_dims: 5,
-                  reduction_method: 'umap',
-                  display_dims: 3,
-                  feature_type: 'both'
-                }}
-                onFinish={handleRunClusteringSubmit}
-              >
-                <Form.Item
-                  name="min_cluster_size"
-                  label="Min Cluster Size"
-                  rules={[{ required: true, message: 'Required' }]}
+            <div className="cvat-cluster-explorer-layout">
+              <div className="cvat-cluster-explorer-controls">
+                <Title level={4}>Clustering Settings</Title>
+                <Form
+                  form={form}
+                  layout="vertical"
+                  initialValues={{
+                    min_cluster_size: 5,
+                    min_samples: 5,
+                    clustering_dims: 5,
+                    reduction_method: 'umap',
+                    display_dims: 3,
+                    feature_type: 'both'
+                  }}
+                  onFinish={handleRunClusteringSubmit}
                 >
-                  <InputNumber min={2} max={100} />
-                </Form.Item>
-
-                <Form.Item
-                  name="min_samples"
-                  label="Min Samples"
-                  rules={[{ required: true, message: 'Required' }]}
-                >
-                  <InputNumber min={1} max={100} />
-                </Form.Item>
-
-                <Form.Item
-                  name="clustering_dims"
-                  label="Clustering Dimensions"
-                  rules={[{ required: true, message: 'Required' }]}
-                >
-                  <InputNumber min={2} max={50} />
-                </Form.Item>
-
-                <Form.Item
-                  name="reduction_method"
-                  label="Reduction Method"
-                  rules={[{ required: true, message: 'Required' }]}
-                >
-                  <Select>
-                    <Option value="pca">PCA</Option>
-                    <Option value="umap">UMAP</Option>
-                  </Select>
-                </Form.Item>
-
-                <Form.Item
-                  name="feature_type"
-                  label="Feature Type"
-                  rules={[{ required: true, message: 'Required' }]}
-                >
-                  <Select>
-                    <Option value="image">Visual Features</Option>
-                    <Option value="text">Contextual Features</Option>
-                    <Option value="both">Both</Option>
-                  </Select>
-                </Form.Item>
-
-                <Form.Item
-                  name="display_dims"
-                  label="Display Dimensions"
-                  rules={[{ required: true, message: 'Required' }]}
-                >
-                  <Select>
-                    <Option value={2}>2D</Option>
-                    <Option value={3}>3D</Option>
-                  </Select>
-                </Form.Item>
-
-                <Form.Item className="form-actions">
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    loading={clusteringLoading}
-                    icon={<ReloadOutlined />}
+                  <Form.Item
+                    name="min_cluster_size"
+                    label="Min Cluster Size"
+                    rules={[{ required: true, message: 'Required' }]}
                   >
-                    Run Clustering
-                  </Button>
-                </Form.Item>
-              </Form>
-            </div>
+                    <InputNumber min={2} max={100} />
+                  </Form.Item>
 
-            <Divider />
+                  <Form.Item
+                    name="min_samples"
+                    label="Min Samples"
+                    rules={[{ required: true, message: 'Required' }]}
+                  >
+                    <InputNumber min={1} max={100} />
+                  </Form.Item>
 
-            <div className="cvat-cluster-explorer-visualization">
+                  <Form.Item
+                    name="clustering_dims"
+                    label="Clustering Dimensions"
+                    rules={[{ required: true, message: 'Required' }]}
+                  >
+                    <InputNumber min={2} max={50} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="reduction_method"
+                    label="Reduction Method"
+                    rules={[{ required: true, message: 'Required' }]}
+                  >
+                    <Select>
+                      <Option value="pca">PCA</Option>
+                      <Option value="umap">UMAP</Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item
+                    name="feature_type"
+                    label="Feature Type"
+                    rules={[{ required: true, message: 'Required' }]}
+                  >
+                    <Select>
+                      <Option value="image">Visual Features</Option>
+                      <Option value="text">Contextual Features</Option>
+                      <Option value="both">Both</Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item
+                    name="display_dims"
+                    label="Display Dimensions"
+                    rules={[{ required: true, message: 'Required' }]}
+                  >
+                    <Select>
+                      <Option value={2}>2D</Option>
+                      <Option value={3}>3D</Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item className="form-actions">
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={clusteringLoading}
+                      icon={<ReloadOutlined />}
+                    >
+                      Run Clustering
+                    </Button>
+                  </Form.Item>
+                </Form>
+              </div>
+
+              <div className="cvat-cluster-explorer-visualization">
               <div className="cvat-cluster-visualization-toolbar">
                 <div className="cvat-cluster-visualization-actions">
                   <Search
@@ -741,6 +740,7 @@ const ClusterExplorer: React.FC = () => {
               ) : (
                 <Empty description="No visualization data available" />
               )}
+              </div>
             </div>
           </Card>
         </TabPane>
@@ -1063,6 +1063,14 @@ const ClusterExplorer: React.FC = () => {
             chipIds={selectedPoints}
             clusterId={selectedCluster || -1}
             onChipMoveToNoise={handleChipMoveToNoise}
+            chipData={visualizationData ? 
+              Object.fromEntries(
+                visualizationData.points.map(point => [
+                  point.filename, 
+                  { filename: point.filename, description: point.description }
+                ])
+              ) : undefined
+            }
           />
         </Card>
       )}

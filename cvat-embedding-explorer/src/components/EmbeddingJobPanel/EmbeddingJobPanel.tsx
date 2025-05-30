@@ -29,17 +29,7 @@ interface EmbeddingJobPanelProps {
   onClose: () => void;
 }
 
-interface EmbeddingJobRequest {
-  project_id: number;
-  task_ids: number[];
-  feature_type: string;
-  chip_limit: number;
-  recalculate: boolean;
-  visual_model: string;
-  semantic_model: string;
-  text_embedding_model: string;
-  lvlm_prompt: string;
-}
+
 
 const EmbeddingJobPanel: React.FC<EmbeddingJobPanelProps> = ({
   project,

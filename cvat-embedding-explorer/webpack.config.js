@@ -27,6 +27,7 @@ module.exports = {
             loader: 'sass-loader',
             options: {
               implementation: require('sass'),
+              api: 'modern',
               sassOptions: {
                 fiber: false
               }

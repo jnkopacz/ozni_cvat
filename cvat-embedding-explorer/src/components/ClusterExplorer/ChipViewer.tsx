@@ -13,6 +13,7 @@ interface ChipViewerProps {
   chipIds: string[];
   clusterId: number;
   onChipMoveToNoise?: (chipId: string) => void;
+  chipData?: { [key: string]: { filename: string; description: string } };
 }
 
 interface Chip {
@@ -22,13 +23,16 @@ interface Chip {
   clusterId: number;
   selected: boolean;
   inNoise: boolean;
+  filename: string;
+  description: string;
 }
 
 const ChipViewer: React.FC<ChipViewerProps> = ({ 
   projectId, 
   chipIds, 
   clusterId, 
-  onChipMoveToNoise
+  onChipMoveToNoise,
+  chipData
 }) => {
   const [chips, setChips] = useState<Chip[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -40,14 +44,19 @@ const ChipViewer: React.FC<ChipViewerProps> = ({
       setLoading(true);
       try {
         // Create chip objects with URLs from our API
-        const chipObjects = chipIds.map(id => ({
-          id,
-          url: api.getChipUrl(projectId, id),
-          label: getChipLabel(id) || null,
-          clusterId,
-          selected: false,
-          inNoise: isChipInNoise(id)
-        }));
+        const chipObjects = chipIds.map(id => {
+          const data = chipData?.[id];
+          return {
+            id,
+            url: api.getChipUrl(projectId, id),
+            label: getChipLabel(id) || null,
+            clusterId,
+            selected: false,
+            inNoise: isChipInNoise(id),
+            filename: data?.filename || id,
+            description: data?.description || 'No description available'
+          };
+        });
 
         setChips(chipObjects);
         setError(null);
@@ -146,16 +155,14 @@ const ChipViewer: React.FC<ChipViewerProps> = ({
                   onClick={() => handleChipSelection(chip.id, !chip.selected)}
                 >
                   <div className="cvat-chip-card-content">
-                    <Checkbox
-                      checked={chip.selected}
-                      onChange={e => handleChipSelection(chip.id, e.target.checked)}
-                      onClick={e => e.stopPropagation()}
-                    />
-                    {chip.label ? (
-                      <Tag color="blue">{chip.label}</Tag>
-                    ) : (
-                      <Tag color="gray">Unlabeled</Tag>
-                    )}
+                    <div className="cvat-chip-card-filename">
+                      <Text strong>{chip.filename}</Text>
+                    </div>
+                    <div className="cvat-chip-card-description">
+                      <Text type="secondary" title={chip.description}>
+                        {chip.description}
+                      </Text>
+                    </div>
                   </div>
                 </Card>
               </Col>
@@ -185,7 +192,14 @@ const ChipViewer: React.FC<ChipViewerProps> = ({
                     size="small"
                   >
                     <div className="cvat-chip-card-content">
-                      <Tag color="orange">Noise</Tag>
+                      <div className="cvat-chip-card-filename">
+                        <Text strong>{chip.filename}</Text>
+                      </div>
+                      <div className="cvat-chip-card-description">
+                        <Text type="secondary" title={chip.description}>
+                          {chip.description}
+                        </Text>
+                      </div>
                     </div>
                   </Card>
                 </Col>

@@ -36,6 +36,10 @@ export interface EmbeddingJobRequest {
   feature_type: 'visual' | 'semantic' | 'both';
   chip_limit: number;
   recalculate?: boolean;
+  visual_model?: string;
+  semantic_model?: string;
+  text_embedding_model?: string;
+  lvlm_prompt?: string;
 }
 
 export interface EmbeddingJobResponse {
