@@ -60,5 +60,14 @@ export const api = {
   // Chip endpoints
   getChipUrl: (projectId: number, filename: string) => {
     return `${API_BASE_URL}/chip/${projectId}/${filename}`;
+  },
+
+  // Label suggestion endpoint
+  suggestLabel: async (projectId: number, chipDescriptions: string[]) => {
+    const response = await axios.post(`${API_BASE_URL}/suggest-label`, {
+      project_id: projectId,
+      chip_descriptions: chipDescriptions
+    });
+    return response.data;
   }
 };

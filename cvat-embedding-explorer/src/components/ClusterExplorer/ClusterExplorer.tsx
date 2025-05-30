@@ -98,6 +98,7 @@ const ClusterExplorer: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [chipViewerVisible, setChipViewerVisible] = useState<boolean>(false);
   const [isSearchMode, setIsSearchMode] = useState<boolean>(false);
+  const [suggestingLabel, setSuggestingLabel] = useState<boolean>(false);
   
   // Session management
   const {
@@ -147,7 +148,7 @@ const ClusterExplorer: React.FC = () => {
 
             // Fetch available labels from the project
             // In a real implementation, this would come from the API
-            setAvailableLabels(['Person', 'Car', 'Bicycle', 'Tree', 'Building', 'Sign', 'Animal']);
+            setAvailableLabels([]);
           }
         } else {
           setError('Project not found');
@@ -185,7 +186,7 @@ const ClusterExplorer: React.FC = () => {
       // After clustering, get visualization data
       const visualizationRequest = {
         project_id: parseInt(projectId),
-        display_dims: values.display_dims,
+        display_dims: 3, // Always use 3D
         reduction_method: values.reduction_method,
         feature_type: values.feature_type
       };
@@ -525,6 +526,46 @@ const ClusterExplorer: React.FC = () => {
     }
   };
 
+  const handleSuggestLabel = async () => {
+    if (!visualizationData || selectedPoints.length === 0) {
+      message.warning('Please select chips first');
+      return;
+    }
+
+    setSuggestingLabel(true);
+    
+    try {
+      // Get descriptions for selected chips (limit to 10)
+      const chipDescriptions = selectedPoints
+        .slice(0, 10)
+        .map(chipId => {
+          const point = visualizationData.points.find(p => p.filename === chipId);
+          return point?.description || '';
+        })
+        .filter(desc => desc.length > 0);
+
+      if (chipDescriptions.length === 0) {
+        message.warning('No descriptions available for selected chips');
+        return;
+      }
+
+      // Call the suggest label API
+      const response = await api.suggestLabel(parseInt(projectId), chipDescriptions);
+      
+      if (response.suggested_label) {
+        setNewLabel(response.suggested_label);
+        message.success(`Suggested label: "${response.suggested_label}"`);
+      } else {
+        message.warning('Could not generate a label suggestion');
+      }
+    } catch (error) {
+      console.error('Error suggesting label:', error);
+      message.error('Failed to suggest label. Please try again.');
+    } finally {
+      setSuggestingLabel(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="cvat-cluster-explorer-loading">
@@ -644,17 +685,6 @@ const ClusterExplorer: React.FC = () => {
                       <Option value="image">Visual Features</Option>
                       <Option value="text">Contextual Features</Option>
                       <Option value="both">Both</Option>
-                    </Select>
-                  </Form.Item>
-
-                  <Form.Item
-                    name="display_dims"
-                    label="Display Dimensions"
-                    rules={[{ required: true, message: 'Required' }]}
-                  >
-                    <Select>
-                      <Option value={2}>2D</Option>
-                      <Option value={3}>3D</Option>
                     </Select>
                   </Form.Item>
 
@@ -921,40 +951,59 @@ const ClusterExplorer: React.FC = () => {
 
           <Form layout="vertical">
             <Form.Item label="Select Label">
-              <Select
-                value={newLabel}
-                onChange={setNewLabel}
-                style={{ width: '100%' }}
-                placeholder="Select a label"
-                dropdownRender={menu => (
-                  <>
-                    {menu}
-                    <Divider style={{ margin: '8px 0' }} />
-                    <Space style={{ padding: '0 8px 4px' }}>
-                      <Input
-                        placeholder="Add new label"
-                        value={newLabel}
-                        onChange={e => setNewLabel(e.target.value)}
-                      />
-                      <Button
-                        type="text"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          if (newLabel && !availableLabels.includes(newLabel)) {
-                            setAvailableLabels([...availableLabels, newLabel]);
-                          }
-                        }}
-                      >
-                        Add
-                      </Button>
-                    </Space>
-                  </>
-                )}
-              >
-                {availableLabels.map(label => (
-                  <Option key={label} value={label}>{label}</Option>
-                ))}
-              </Select>
+              <Space.Compact style={{ width: '100%' }}>
+                <Select
+                  value={newLabel}
+                  onChange={setNewLabel}
+                  style={{ width: '100%' }}
+                  placeholder="Select a label"
+                  dropdownRender={menu => (
+                    <>
+                      {menu}
+                      <Divider style={{ margin: '8px 0' }} />
+                      <Space style={{ padding: '0 8px 4px' }}>
+                        <Input
+                          placeholder="Add new label"
+                          value={newLabel}
+                          onChange={e => setNewLabel(e.target.value)}
+                        />
+                        <Button
+                          type="text"
+                          icon={<PlusOutlined />}
+                          onClick={() => {
+                            if (newLabel && !availableLabels.includes(newLabel)) {
+                              setAvailableLabels([...availableLabels, newLabel]);
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </Space>
+                    </>
+                  )}
+                >
+                  {availableLabels.map(label => (
+                    <Option key={label} value={label}>{label}</Option>
+                  ))}
+                </Select>
+              </Space.Compact>
+            </Form.Item>
+            
+            <Form.Item>
+              <Space>
+                <Button
+                  type="default"
+                  icon={<PlusOutlined />}
+                  loading={suggestingLabel}
+                  onClick={handleSuggestLabel}
+                  disabled={selectedPoints.length === 0}
+                >
+                  {suggestingLabel ? 'Suggesting...' : 'Suggest'}
+                </Button>
+                <Text type="secondary">
+                  Generate a suggested label
+                </Text>
+              </Space>
             </Form.Item>
           </Form>
         </div>
@@ -1029,3 +1078,4 @@ const ClusterExplorer: React.FC = () => {
 };
 
 export default ClusterExplorer;
+                                                                

@@ -544,6 +544,41 @@ def get_label_hierarchy(project_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/suggest-label', methods=['POST'])
+def suggest_label():
+    """Suggest a label based on chip descriptions using LLM"""
+    data = request.json
+    
+    if not data or 'project_id' not in data or 'chip_descriptions' not in data:
+        return jsonify({"error": "project_id and chip_descriptions are required"}), 400
+    
+    project_id = data['project_id']
+    chip_descriptions = data['chip_descriptions']
+    
+    # Validate input
+    if not isinstance(chip_descriptions, list) or len(chip_descriptions) == 0:
+        return jsonify({"error": "chip_descriptions must be a non-empty list"}), 400
+    
+    # Limit to 10 descriptions for performance
+    if len(chip_descriptions) > 10:
+        chip_descriptions = chip_descriptions[:10]
+    
+    try:
+        suggested_label = label_hierarchy_service.suggest_label_for_chips(
+            int(project_id), 
+            chip_descriptions
+        )
+        
+        return jsonify({
+            "project_id": project_id,
+            "suggested_label": suggested_label,
+            "descriptions_count": len(chip_descriptions)
+        })
+        
+    except Exception as e:
+        print(f"Error suggesting label: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # Add this helper function with the other helper functions
 def get_audio_file_path(frame_name: str) -> Path:
     """
