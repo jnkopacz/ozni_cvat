@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { api } from '../api/api';
+import { LabelCreateRequest, AnnotationUpdate } from '../models/types';
 
 export interface LabelingSession {
   projectId: number;
@@ -25,6 +27,11 @@ interface LabelingSessionState {
   session: LabelingSession | null;
   clusterStates: Map<number, ClusterState>;
   currentCluster: number | null;
+  completionStatus: {
+    isCompleting: boolean;
+    completionProgress: number;
+    completionError: string | null;
+  };
 }
 
 type LabelingSessionAction =
@@ -38,12 +45,18 @@ type LabelingSessionAction =
   | { type: 'RESET_SESSION' }
   | { type: 'UPDATE_PROGRESS' }
   | { type: 'UPDATE_CLUSTERING'; payload: { totalChips: number } }
-  | { type: 'CLEAR_NOISE_CLUSTER' };
+  | { type: 'CLEAR_NOISE_CLUSTER' }
+  | { type: 'SET_COMPLETION_STATUS'; payload: { isCompleting: boolean; completionProgress?: number; completionError?: string } };
 
 const initialState: LabelingSessionState = {
   session: null,
   clusterStates: new Map(),
   currentCluster: null,
+  completionStatus: {
+    isCompleting: false,
+    completionProgress: 0,
+    completionError: null,
+  },
 };
 
 const labelingSessionReducer = (
@@ -250,6 +263,16 @@ const labelingSessionReducer = (
         },
       };
 
+    case 'SET_COMPLETION_STATUS':
+      return {
+        ...state,
+        completionStatus: {
+          isCompleting: action.payload.isCompleting,
+          completionProgress: action.payload.completionProgress ?? state.completionStatus.completionProgress,
+          completionError: action.payload.completionError ?? state.completionStatus.completionError,
+        },
+      };
+
     case 'RESET_SESSION':
       return initialState;
 
@@ -271,6 +294,7 @@ interface LabelingSessionContextType {
   loadSession: () => void;
   updateClustering: (totalChips: number) => void;
   clearNoiseCluster: () => void;
+  completeSession: () => Promise<void>;
   getClusterState: (clusterId: number) => ClusterState;
   isChipLabeled: (chipId: string) => boolean;
   getChipLabel: (chipId: string) => string | undefined;
@@ -420,6 +444,123 @@ export const LabelingSessionProvider: React.FC<{ children: React.ReactNode }> = 
     };
   };
 
+  // Todo, update this function to work properly. First create labels with API call, then update annotations with second API call.
+  const completeSession = async () => {
+    if (!state.session) {
+      throw new Error('No active session to complete');
+    }
+
+    try {
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 0, completionError: undefined } });
+
+      const projectId = state.session.projectId;
+      const uniqueLabels = Array.from(new Set(state.session.chipLabels.values()));
+      
+      // Step 1: Get tasks for this project
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 5 } });
+      const tasksResponse = await api.getTasks(projectId);
+      const taskIds = tasksResponse.map((task: any) => task.id);
+      
+      if (taskIds.length === 0) {
+        throw new Error('No tasks found for this project');
+      }
+      
+      // Step 2: Get existing project labels
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 10 } });
+      const existingLabelsResponse = await api.getProjectLabels(projectId);
+      const existingLabelNames = new Set(existingLabelsResponse.labels.map((label: any) => label.name));
+      
+      // Step 3: Create new labels that don't exist
+      const newLabels = uniqueLabels.filter(label => !existingLabelNames.has(label));
+      const labelIdMapping = new Map<string, number>();
+      
+      // Add existing labels to mapping
+      existingLabelsResponse.labels.forEach((label: any) => {
+        labelIdMapping.set(label.name, label.id);
+      });
+      
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 20 } });
+      
+      // Create new labels
+      for (let i = 0; i < newLabels.length; i++) {
+        const labelName = newLabels[i];
+        const labelData: LabelCreateRequest = {
+          name: labelName,
+          color: `#${Math.floor(Math.random()*16777215).toString(16)}`, // Random color
+        };
+        
+        const createResponse = await api.createProjectLabel(projectId, labelData);
+        labelIdMapping.set(labelName, createResponse.label.id);
+        
+        const progress = 20 + (30 * (i + 1) / newLabels.length);
+        dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: progress } });
+      }
+      
+      // Step 4: Prepare annotation updates for each task
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 50 } });
+      
+      // for (let taskIndex = 0; taskIndex < taskIds.length; taskIndex++) {
+      //   const taskId = taskIds[taskIndex];
+        
+      //   // Get task annotations with labels
+      //   const taskAnnotationsResponse = await api.getTaskAnnotationsWithLabels(taskId);
+      //   const taskAnnotations = taskAnnotationsResponse.annotations;
+        
+      //   // Create annotation updates for this task
+      //   const annotationUpdates: AnnotationUpdate[] = [];
+        
+      //   taskAnnotations.forEach((annotation: any) => {
+      //     // Extract chip ID from annotation (assuming filename pattern)
+      //     const chipId = `task${taskId}_chip_frame${annotation.frame}_anno${annotation.id}.png`;
+      //     const newLabel = state.session!.chipLabels.get(chipId);
+          
+      //     if (newLabel && labelIdMapping.has(newLabel)) {
+      //       const newLabelId = labelIdMapping.get(newLabel)!;
+      //       if (annotation.label_id !== newLabelId) {
+      //         annotationUpdates.push({
+      //           annotation_id: annotation.id,
+      //           new_label_id: newLabelId,
+      //         });
+      //       }
+      //     }
+      //   });
+        
+      //   // Step 4: Validate and apply updates for this task
+      //   if (annotationUpdates.length > 0) {
+      //     // Validate updates
+      //     const validationResponse = await api.validateAnnotationUpdates(taskId, annotationUpdates);
+          
+      //     if (!validationResponse.all_valid) {
+      //       const errors = validationResponse.validation_results
+      //         .filter((result: any) => !result.valid)
+      //         .map((result: any) => `Annotation ${result.annotation_id}: ${result.errors.join(', ')}`)
+      //         .join('; ');
+      //       throw new Error(`Validation failed for task ${taskId}: ${errors}`);
+      //     }
+          
+      //     // Apply updates
+      //     await api.updateAnnotationLabels(taskId, annotationUpdates);
+      //   }
+        
+      //   const taskProgress = 50 + (40 * (taskIndex + 1) / taskIds.length);
+      //   dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: taskProgress } });
+      // }
+      
+      // Step 5: Complete
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 100 } });
+      
+      // Reset completion status after a short delay
+      setTimeout(() => {
+        dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: false, completionProgress: 0, completionError: undefined } });
+      }, 2000);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: false, completionProgress: 0, completionError: errorMessage } });
+      throw error;
+    }
+  };
+
   return (
     <LabelingSessionContext.Provider
       value={{
@@ -435,6 +576,7 @@ export const LabelingSessionProvider: React.FC<{ children: React.ReactNode }> = 
         loadSession,
         updateClustering,
         clearNoiseCluster,
+        completeSession,
         getClusterState,
         isChipLabeled,
         getChipLabel,

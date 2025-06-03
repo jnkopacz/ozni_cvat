@@ -1,7 +1,8 @@
 // src/components/ClusterExplorer/ClusterVisualization.tsx
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Empty, Image, Button, Tooltip, Input } from 'antd';
-import { SelectOutlined, DragOutlined } from '@ant-design/icons';
+import { Empty, Image, Button, Tooltip, Input, Modal, message } from 'antd';
+import { SelectOutlined, DragOutlined, CloudUploadOutlined } from '@ant-design/icons';
+import { useLabelingSession } from '../../contexts/LabelingSessionContext';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import './styles.scss';

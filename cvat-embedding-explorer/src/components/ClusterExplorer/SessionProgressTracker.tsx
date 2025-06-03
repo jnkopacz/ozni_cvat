@@ -1,14 +1,16 @@
-import React from 'react';
-import { Card, Progress, Typography, Row, Col, Tag, Statistic, Divider } from 'antd';
-import { ClockCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Card, Progress, Typography, Row, Col, Tag, Statistic, Divider, Button, Modal, Input, message, Alert } from 'antd';
+import { ClockCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import { useLabelingSession } from '../../contexts/LabelingSessionContext';
 import './styles.scss';
 
 const { Title, Text } = Typography;
 
 const SessionProgressTracker: React.FC = () => {
-  const { getSessionStats, state } = useLabelingSession();
+  const { getSessionStats, state, completeSession } = useLabelingSession();
   const stats = getSessionStats();
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const formatDuration = (milliseconds: number): string => {
     const seconds = Math.floor(milliseconds / 1000);
@@ -48,6 +50,20 @@ const SessionProgressTracker: React.FC = () => {
   };
 
   const labelBreakdown = getLabelBreakdown();
+
+  const handleCompleteSession = async () => {
+    try {
+      setIsCompleting(true);
+      await completeSession();
+      message.success('Session completed successfully! Labels and annotations have been pushed to CVAT.');
+      setShowCompletionModal(false);
+    } catch (error) {
+      console.error('Error completing session:', error);
+      message.error(`Failed to complete session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsCompleting(false);
+    }
+  };
 
   if (!state.session) {
     return null;
@@ -135,13 +151,72 @@ const SessionProgressTracker: React.FC = () => {
       )}
 
       {stats.progressPercentage === 100 && (
-        <div className="cvat-session-progress-complete">
-          <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
-          <Text type="success" strong>
-            Labeling session complete! All chips have been labeled.
-          </Text>
-        </div>
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <div className="cvat-session-progress-complete">
+            <div style={{ marginRight: 12 }}>
+              <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
+              <Text type="success" strong>
+                Labeling session complete! All chips have been labeled.
+              </Text>
+            </div>
+            
+            {state.completionStatus.isCompleting ? (
+              <div>
+                <Progress 
+                  percent={state.completionStatus.completionProgress} 
+                  status="active"
+                  strokeColor="#52c41a"
+                  size="small"
+                />
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  Pushing results to CVAT...
+                </Text>
+              </div>
+            ) : (
+              <Button 
+                type="primary" 
+                icon={<CloudUploadOutlined />}
+                onClick={() => setShowCompletionModal(true)}
+                disabled={state.completionStatus.isCompleting}
+              >
+                Save New Labels
+              </Button>
+            )}
+            
+            {state.completionStatus.completionError && (
+              <Alert 
+                message="Completion Error" 
+                description={state.completionStatus.completionError}
+                type="error" 
+                showIcon 
+                style={{ marginTop: 8 }}
+                closable
+              />
+            )}
+          </div>
+        </>
       )}
+      
+      <Modal
+        title="Complete Labeling Session"
+        open={showCompletionModal}
+        onOk={handleCompleteSession}
+        onCancel={() => setShowCompletionModal(false)}
+        confirmLoading={isCompleting}
+        okText="Save New Labels"
+        cancelText="Cancel"
+      >
+        <div>
+          <Text>
+            This will update labels by:
+          </Text>
+          <ul style={{ marginTop: 8, marginBottom: 16 }}>
+            <li>Creating new project labels in the CVAT project</li>
+            <li>Updating annotation assignments to match your new labels</li>
+          </ul>
+        </div>
+      </Modal>
     </Card>
   );
 };

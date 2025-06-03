@@ -75,5 +75,26 @@ export const api = {
     
     const response = await axios.post(`${API_BASE_URL}/suggest-label`, requestData);
     return response.data;
-  }
+  },
+
+  // Label management endpoints
+  createProjectLabel: async (projectId: number, labelData: any) => {
+    const response = await axios.post(`${API_BASE_URL}/projects/${projectId}/labels`, labelData);
+    return response.data;
+  },
+
+  getProjectLabels: async (projectId: number) => {
+    const response = await axios.get(`${API_BASE_URL}/projects/${projectId}/labels`);
+    return response.data;
+  },
+
+  // TODO update this
+  updateAnnotationLabels: async (taskId: number, updates: any[]) => {
+    const response = await axios.post(`${API_BASE_URL}/annotations/update`, {
+      task_id: taskId,
+      updates: updates
+    });
+    return response.data;
+  },
+
 };
