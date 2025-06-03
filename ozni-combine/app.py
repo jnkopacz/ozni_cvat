@@ -16,7 +16,7 @@ import mimetypes
 from services.cvat_service import CVATService
 from services.embedding_service import EmbeddingService
 from services.clustering_service import ClusteringService
-from models.data_models import JobStatus, EmbeddingJob
+from models.data_models import JobStatus, EmbeddingJob, LabelUpdateRequest, AnnotationUpdateRequest, BatchUpdateResponse, LabelCreationResponse
 from config import CHIP_LIMIT, DEFAULT_VISUAL_MODEL, DEFAULT_SEMANTIC_MODEL, DEFAULT_TEXT_EMBEDDING_MODEL, DEFAULT_LVLM_PROMPT
 from services.label_hierarchy_service import LabelHierarchyService
 
@@ -649,6 +649,87 @@ def get_audio_file(filename):
 
     except Exception as e:
         print(f"Error serving audio file: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# New endpoints for CVAT label and annotation management
+
+@app.route('/api/projects/<int:project_id>/labels', methods=['POST'])
+def create_project_label(project_id):
+    """Create a new label in a CVAT project"""
+    data = request.json
+    
+    if not data or 'name' not in data:
+        return jsonify({"error": "Label name is required"}), 400
+    
+    try:
+        # Validate label data
+        print(f"Creating label in project {project_id} with data: {data}")
+        label_data = {
+            'name': data['name'],
+            'color': data.get('color', '#ff0000'),
+            'attributes': data.get('attributes', [])
+        }
+        
+        # Create label using CVAT service
+        print(f"Creating label in project {project_id} with data: {label_data}")
+        result = cvat_service.create_project_label(project_id, label_data)
+        
+        return jsonify({
+            'project_id': project_id,
+            'label': result,
+            'success': True
+        })
+        
+    except Exception as e:
+        print(f"Error creating label: {e}")
+        return jsonify({"error": str(e)}), 500
+
+#Requires a project id, returns all labels in the project
+@app.route('/api/projects/<int:project_id>/labels', methods=['GET'])
+def get_project_labels(project_id):
+    """Get all labels for a project (enhanced version)"""
+    try:
+        labels = cvat_service.get_project_labels(project_id)
+        return jsonify({
+            'project_id': project_id,
+            'labels': labels,
+            'count': len(labels)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+#Requires a task id, new_label_id and a list of annotation_ids
+@app.route('/api/annotations/update', methods=['POST'])
+def update_annotation_labels():
+    """Update a batch of annotations"""
+    # print("Update annotations endpoint called")
+    data = request.json
+    
+    # annotation_id is a list
+    if not data or 'task_id' not in data or 'new_label_id' not in data or 'annotation_ids' not in data:
+        return jsonify({"error": "task_id, new_label_id and annotation_ids are required"}), 400
+
+    # print(f"Data contains task_id: {data['task_id']}, new_label_id: {data['new_label_id']}, annotation_ids: {data['annotation_ids']}")
+    try:
+        task_id = int(data['task_id'])
+        new_label_id = int(data['new_label_id'])
+        annotation_ids = data['annotation_ids']
+        
+        # print(f"Updating annotations {annotation_ids} in task {task_id} to new label {new_label_id}")
+
+        result = cvat_service.update_annotation_labels(task_id, annotation_ids, new_label_id)
+
+        return jsonify({
+            'task_id': task_id,
+            'new_label_id': new_label_id,
+            'result': result,
+            'success': True
+        })
+        
+    except Exception as e:
+        print(f"Error updating annotation: {e}")
         return jsonify({"error": str(e)}), 500
 
 

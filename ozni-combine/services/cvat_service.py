@@ -6,6 +6,14 @@ import os
 import sys
 import time
 from config import CVAT_HOST, CVAT_PORT, CVAT_USERNAME, CVAT_PASSWORD
+from cvat_sdk.api_client import models
+from cvat_sdk.api_client.api_client import ApiClient
+from cvat_sdk.models import PatchedLabeledDataRequest  # or PatchedLabeledTrackRequest, PatchedLabeledImageRequest depending on type
+from cvat_sdk.models import PatchedLabeledDataRequest, LabeledShapeRequest
+
+import requests
+from http import HTTPStatus
+
 
 class CVATService:
     def __init__(self):
@@ -13,6 +21,7 @@ class CVATService:
         self.port = CVAT_PORT
         self.username = CVAT_USERNAME
         self.password = CVAT_PASSWORD
+        self.API_URL = self.host + ":" + self.port + "/api/"
 
     def get_client(self):
         """Get a CVAT client connection"""
@@ -35,6 +44,18 @@ class CVATService:
                 }
                 for project in projects
             ]
+        
+    def get_api_url(self, endpoint, **kwargs):
+        return self.API_URL + endpoint + "?" + self._to_query_params(**kwargs)
+    
+    def _to_query_params(self, **kwargs):
+        return "&".join([f"{k}={v}" for k, v in kwargs.items()])
+    
+    def patch_method(self, endpoint, data, **kwargs):
+        print(f"PATCH {self.get_api_url(endpoint, **kwargs)} with data: {data}, and auth credentials: {self.username}:{self.password}")
+        return requests.patch(self.get_api_url(endpoint, **kwargs), json=data, auth=(self.username, self.password))
+    
+
 
     def get_tasks(self, project_id=None):
         """Get tasks, optionally filtered by project_id"""
@@ -92,9 +113,10 @@ class CVATService:
                     'frame': shape.frame,
                     'label': shape.label_id,
                     'points': shape.points,
-                    'attributes': {attr.name: attr.value for attr in shape.attributes}
+                    # 'attributes': {attr.name: attr.value for attr in shape.attributes}
                 })
-
+            print(shapes)
+            print("from cvat_service.py get_annotations")
             return shapes
 
     def filter_annotations(self, annotations, filter_criteria):
@@ -134,15 +156,82 @@ class CVATService:
             return [
                 {
                     'id': label.id,
-                    'name': label.name,
-                    'attributes': [
-                        {
-                            'name': attr.name,
-                            'values': attr.values,
-                            'input_type': attr.input_type
-                        }
-                        for attr in label.attributes
-                    ]
+                    'name': label.name
                 }
                 for label in labels
             ]
+
+    def create_project_label(self, project_id, label_data):
+        """Create a new label in a CVAT project"""
+        print(f"Creating label in project {project_id} with data: {label_data}")
+
+        #Check if it already exists
+        existing_labels = self.get_project_labels(project_id)
+        print("Existing labels in project:", existing_labels)
+        for existing_label in existing_labels:
+            if 'name' not in existing_label or 'id' not in existing_label:
+                print("Skipping invalid label:", existing_label)
+                continue
+            if existing_label['name'] == label_data['name']:
+                print("Existing label found:", existing_label)
+                return {
+                    'id': existing_label['id'],
+                    'name': existing_label['name'],
+                    'exists': True
+                }
+        print("No existing label found, proceeding to create a new one.")
+        # Create new label
+        response = self.patch_method(f'projects/{project_id}', {"labels": [label_data]})
+        if response.status_code not in [200, 201, 202]:
+            raise Exception(f"Failed to create label: {response.text}")
+        print("Label created successfully, response:", response.json())
+        #get label from get_project_labels
+        labels = self.get_project_labels(project_id)
+        print("Checking new list of labels in project", labels)
+        for label in labels:
+            if label['name'] == label_data['name']:
+                print("Found it!", label)
+                return {
+                    'id': label['id'],
+                    'name': label['name'],
+                    'exists': False
+                }     
+                                       
+    def update_annotation_labels(self, task_id, annotation_ids, new_label_id):
+        """Update annotation label (single)"""
+        with self.get_client() as client:
+            task_id = int(task_id)
+            if not isinstance(annotation_ids, list):
+                annotation_ids_list = [int(annotation_ids)]
+            else:
+                annotation_ids_list = [int(aid) for aid in annotation_ids]
+
+            new_label_id = int(new_label_id)
+
+            annotations, _ = client.tasks.api.retrieve_annotations(task_id)
+            
+            shapes_to_patch = []
+            for annotation in annotations["shapes"]:
+                if annotation.id in annotation_ids_list:
+                    shape_dict = annotation.to_dict()
+                    shape_dict['label_id'] = new_label_id   
+                    shape_dict['attributes'] = []  # Clear attributes if needed         
+                    shapes_to_patch.append(shape_dict)
+
+            print(f"Annotations to update: {shapes_to_patch}")
+
+            # Prepare the request body
+            update_request = PatchedLabeledDataRequest(shapes=shapes_to_patch)
+            print(update_request)
+
+            print(f"Update request prepared")
+            _, http_response  = client.tasks.api.partial_update_annotations(
+                "update",id=task_id, patched_labeled_data_request=update_request
+            )
+            if 200 <= http_response.status < 300:
+                print("Annotations updated successfully.")
+                # You might want to inspect response_data if needed
+                return 'success'
+            else:
+                print(f"Failed to update annotations. Status: {http_response.status}, Response: {http_response.data}")
+                return 'failed'
