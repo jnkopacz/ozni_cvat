@@ -89,10 +89,11 @@ export const api = {
   },
 
   // TODO update this
-  updateAnnotationLabels: async (taskId: number, updates: any[]) => {
+  updateAnnotationLabels: async (taskId: number, label_id: number, annotation_ids: any[]) => {
     const response = await axios.post(`${API_BASE_URL}/annotations/update`, {
       task_id: taskId,
-      updates: updates
+      new_label_id: label_id,
+      annotation_ids: annotation_ids
     });
     return response.data;
   },

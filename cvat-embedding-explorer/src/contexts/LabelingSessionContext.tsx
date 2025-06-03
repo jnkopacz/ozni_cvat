@@ -444,7 +444,22 @@ export const LabelingSessionProvider: React.FC<{ children: React.ReactNode }> = 
     };
   };
 
-  // Todo, update this function to work properly. First create labels with API call, then update annotations with second API call.
+  // Parse chip ID to extract task ID and annotation ID
+  // Format: task20_job20_frame10_anno92189.png
+  const parseChipId = (chipId: string): { taskId: number; annotationId: number } | null => {
+    const taskMatch = chipId.match(/task(\d+)_/);
+    const annoMatch = chipId.match(/anno(\d+)/);
+    
+    if (taskMatch && annoMatch) {
+      return {
+        taskId: parseInt(taskMatch[1], 10),
+        annotationId: parseInt(annoMatch[1], 10)
+      };
+    }
+    
+    return null;
+  };
+
   const completeSession = async () => {
     if (!state.session) {
       throw new Error('No active session to complete');
@@ -496,57 +511,59 @@ export const LabelingSessionProvider: React.FC<{ children: React.ReactNode }> = 
         dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: progress } });
       }
       
-      // Step 4: Prepare annotation updates for each task
+      // Step 4: Parse chip IDs and group annotations by task and label
       dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 50 } });
       
-      // for (let taskIndex = 0; taskIndex < taskIds.length; taskIndex++) {
-      //   const taskId = taskIds[taskIndex];
-        
-      //   // Get task annotations with labels
-      //   const taskAnnotationsResponse = await api.getTaskAnnotationsWithLabels(taskId);
-      //   const taskAnnotations = taskAnnotationsResponse.annotations;
-        
-      //   // Create annotation updates for this task
-      //   const annotationUpdates: AnnotationUpdate[] = [];
-        
-      //   taskAnnotations.forEach((annotation: any) => {
-      //     // Extract chip ID from annotation (assuming filename pattern)
-      //     const chipId = `task${taskId}_chip_frame${annotation.frame}_anno${annotation.id}.png`;
-      //     const newLabel = state.session!.chipLabels.get(chipId);
-          
-      //     if (newLabel && labelIdMapping.has(newLabel)) {
-      //       const newLabelId = labelIdMapping.get(newLabel)!;
-      //       if (annotation.label_id !== newLabelId) {
-      //         annotationUpdates.push({
-      //           annotation_id: annotation.id,
-      //           new_label_id: newLabelId,
-      //         });
-      //       }
-      //     }
-      //   });
-        
-      //   // Step 4: Validate and apply updates for this task
-      //   if (annotationUpdates.length > 0) {
-      //     // Validate updates
-      //     const validationResponse = await api.validateAnnotationUpdates(taskId, annotationUpdates);
-          
-      //     if (!validationResponse.all_valid) {
-      //       const errors = validationResponse.validation_results
-      //         .filter((result: any) => !result.valid)
-      //         .map((result: any) => `Annotation ${result.annotation_id}: ${result.errors.join(', ')}`)
-      //         .join('; ');
-      //       throw new Error(`Validation failed for task ${taskId}: ${errors}`);
-      //     }
-          
-      //     // Apply updates
-      //     await api.updateAnnotationLabels(taskId, annotationUpdates);
-      //   }
-        
-      //   const taskProgress = 50 + (40 * (taskIndex + 1) / taskIds.length);
-      //   dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: taskProgress } });
-      // }
+      // Structure: Map<taskId, Map<labelName, annotationIds[]>>
+      const taskLabelAnnotations = new Map<number, Map<string, number[]>>();
       
-      // Step 5: Complete
+      for (const [chipId, label] of state.session.chipLabels.entries()) {
+        const parsed = parseChipId(chipId);
+        if (!parsed) {
+          console.warn(`Could not parse chip ID: ${chipId}`);
+          continue;
+        }
+        
+        const { taskId, annotationId } = parsed;
+        
+        if (!taskLabelAnnotations.has(taskId)) {
+          taskLabelAnnotations.set(taskId, new Map());
+        }
+        
+        const taskLabels = taskLabelAnnotations.get(taskId)!;
+        if (!taskLabels.has(label)) {
+          taskLabels.set(label, []);
+        }
+        
+        taskLabels.get(label)!.push(annotationId);
+      }
+      
+      console.log('Grouped annotations by task and label:', taskLabelAnnotations);
+      
+      // Step 5: Update annotations for each task and label combination
+      const totalUpdates = Array.from(taskLabelAnnotations.values())
+        .reduce((sum, taskLabels) => sum + taskLabels.size, 0);
+      let completedUpdates = 0;
+      
+      for (const [taskId, taskLabels] of taskLabelAnnotations.entries()) {
+        for (const [labelName, annotationIds] of taskLabels.entries()) {
+          const labelId = labelIdMapping.get(labelName);
+          if (!labelId) {
+            throw new Error(`Label ID not found for label: ${labelName}`);
+          }
+          
+          console.log(`Updating task ${taskId}, label "${labelName}" (ID: ${labelId}), annotations: [${annotationIds.join(', ')}]`);
+          
+          // Apply updates
+          await api.updateAnnotationLabels(taskId, labelId, annotationIds);
+          
+          completedUpdates++;
+          const progress = 50 + (40 * completedUpdates / totalUpdates);
+          dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: progress } });
+        }
+      }
+      
+      // Step 6: Complete
       dispatch({ type: 'SET_COMPLETION_STATUS', payload: { isCompleting: true, completionProgress: 100 } });
       
       // Reset completion status after a short delay

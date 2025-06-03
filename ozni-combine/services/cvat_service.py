@@ -115,8 +115,8 @@ class CVATService:
                     'points': shape.points,
                     # 'attributes': {attr.name: attr.value for attr in shape.attributes}
                 })
-            print(shapes)
-            print("from cvat_service.py get_annotations")
+            # print(shapes)
+            # print("from cvat_service.py get_annotations")
             return shapes
 
     def filter_annotations(self, annotations, filter_criteria):
@@ -218,11 +218,11 @@ class CVATService:
                     shape_dict['attributes'] = []  # Clear attributes if needed         
                     shapes_to_patch.append(shape_dict)
 
-            print(f"Annotations to update: {shapes_to_patch}")
+            # print(f"Annotations to update: {shapes_to_patch}")
 
             # Prepare the request body
             update_request = PatchedLabeledDataRequest(shapes=shapes_to_patch)
-            print(update_request)
+            # print(update_request)
 
             print(f"Update request prepared")
             _, http_response  = client.tasks.api.partial_update_annotations(

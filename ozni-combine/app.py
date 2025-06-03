@@ -652,8 +652,10 @@ def get_audio_file(filename):
         return jsonify({"error": str(e)}), 500
 
 
-# New endpoints for CVAT label and annotation management
 
+
+
+# Requires a project id and label name, creates a new label in the project
 @app.route('/api/projects/<int:project_id>/labels', methods=['POST'])
 def create_project_label(project_id):
     """Create a new label in a CVAT project"""
@@ -706,6 +708,7 @@ def update_annotation_labels():
     """Update a batch of annotations"""
     # print("Update annotations endpoint called")
     data = request.json
+    # print(f"Received data for update: {data}")
     
     # annotation_id is a list
     if not data or 'task_id' not in data or 'new_label_id' not in data or 'annotation_ids' not in data:
