@@ -5,7 +5,8 @@ CVAT_USERNAME = 'justin.kopacz@ozniai.com'
 CVAT_PASSWORD = 'password'
 
 # Ollama settings
-OLLAMA_HOST = 'http://localhost:11434'
+# OLLAMA_HOST = 'http://localhost:11434'
+OLLAMA_HOST = 'http://192.168.2.199:11434'
 
 # Embedding settings
 CHIP_LIMIT = 100
@@ -35,6 +36,7 @@ DEFAULT_LVLM_PROMPT = 'Describe the military object centered in this image. This
 
 # Add to your existing config.py
 COMBINE_MODEL = "gemma3:27b" # or whatever Ollama model you want to use for hierarchy analysis
+# COMBINE_MODEL = "qwen3:30b"
 # COMBINE_MODEL = "llama3.3:latest"
 # COMBINE_MODEL = "llama3.2:3b"
 #todo, try quen3:30b

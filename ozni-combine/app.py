@@ -218,12 +218,14 @@ def process_embedding_job(job_id):
         all_chips_data = []
         total_frames_to_process = 0
         processed_frames = 0
+        total_annotations_to_process = 0
 
         # First count total frames with annotations to track progress
         for task_id in job.task_ids:
             task_info = cvat_service.get_task_info(task_id)
             annotations = cvat_service.get_annotations(task_id)
-
+            total_annotations_to_process += len(annotations)
+            print(f"Total annotations to process: {total_annotations_to_process}")
             # Apply filters if specified
             if job.filter_criteria:
                 annotations = cvat_service.filter_annotations(
@@ -239,6 +241,7 @@ def process_embedding_job(job_id):
         for task_id in job.task_ids:
             task_info = cvat_service.get_task_info(task_id)
             annotations = cvat_service.get_annotations(task_id)
+
 
             # Apply filters if specified
             if job.filter_criteria:
@@ -279,16 +282,17 @@ def process_embedding_job(job_id):
                 if job.chip_limit > 0:
                     print(f"Processed {len(all_chips_data)} frames of {job.chip_limit}")
                     job.progress = min(99, int(100 * len(all_chips_data) / job.chip_limit))
+                    if len(all_chips_data) >= job.chip_limit:
+                        break
+
                 else:
-                    print(f"Processed {len(all_chips_data)} frames of {total_frames_to_process}")
-                    job.progress = min(99, int(100 * len(all_chips_data) / total_frames_to_process))
+                    print(f"Processed {len(all_chips_data)} frames of {total_annotations_to_process}")
+                    job.progress = min(99, int(100 * len(all_chips_data) / total_annotations_to_process))
+                    if len(all_chips_data) >= total_annotations_to_process:
+                        break
 
                 # Check if we've reached the chip limit
-                if len(all_chips_data) >= job.chip_limit:
-                    break
 
-            if len(all_chips_data) >= job.chip_limit:
-                break
 
         # Prepare data for storage
         descriptions = [(filename, desc) for filename, desc, _, _ in all_chips_data]
@@ -548,40 +552,40 @@ def get_label_hierarchy(project_id):
 def suggest_label():
     """Suggest a label based on chip descriptions using LLM"""
     data = request.json
-    
+
     if not data or 'project_id' not in data or 'chip_descriptions' not in data:
         return jsonify({"error": "project_id and chip_descriptions are required"}), 400
-    
+
     project_id = data['project_id']
     chip_descriptions = data['chip_descriptions']
     existing_labels = data.get('existing_labels', None)  # Optional parameter
-    
+
     # Validate input
     if not isinstance(chip_descriptions, list) or len(chip_descriptions) == 0:
         return jsonify({"error": "chip_descriptions must be a non-empty list"}), 400
-    
+
     # Validate existing_labels if provided
     if existing_labels is not None and not isinstance(existing_labels, list):
         return jsonify({"error": "existing_labels must be a list if provided"}), 400
-    
+
     # Limit to 10 descriptions for performance
     if len(chip_descriptions) > 10:
         chip_descriptions = chip_descriptions[:10]
-    
+
     try:
         suggested_label = label_hierarchy_service.suggest_label_for_chips(
-            int(project_id), 
+            int(project_id),
             chip_descriptions,
             existing_labels
         )
-        
+
         return jsonify({
             "project_id": project_id,
             "suggested_label": suggested_label,
             "descriptions_count": len(chip_descriptions),
             "existing_labels_count": len(existing_labels) if existing_labels else 0
         })
-        
+
     except Exception as e:
         print(f"Error suggesting label: {e}")
         return jsonify({"error": str(e)}), 500
@@ -660,10 +664,10 @@ def get_audio_file(filename):
 def create_project_label(project_id):
     """Create a new label in a CVAT project"""
     data = request.json
-    
+
     if not data or 'name' not in data:
         return jsonify({"error": "Label name is required"}), 400
-    
+
     try:
         # Validate label data
         print(f"Creating label in project {project_id} with data: {data}")
@@ -672,17 +676,17 @@ def create_project_label(project_id):
             'color': data.get('color', '#ff0000'),
             'attributes': data.get('attributes', [])
         }
-        
+
         # Create label using CVAT service
         print(f"Creating label in project {project_id} with data: {label_data}")
         result = cvat_service.create_project_label(project_id, label_data)
-        
+
         return jsonify({
             'project_id': project_id,
             'label': result,
             'success': True
         })
-        
+
     except Exception as e:
         print(f"Error creating label: {e}")
         return jsonify({"error": str(e)}), 500
@@ -709,7 +713,7 @@ def update_annotation_labels():
     # print("Update annotations endpoint called")
     data = request.json
     # print(f"Received data for update: {data}")
-    
+
     # annotation_id is a list
     if not data or 'task_id' not in data or 'new_label_id' not in data or 'annotation_ids' not in data:
         return jsonify({"error": "task_id, new_label_id and annotation_ids are required"}), 400
@@ -719,7 +723,7 @@ def update_annotation_labels():
         task_id = int(data['task_id'])
         new_label_id = int(data['new_label_id'])
         annotation_ids = data['annotation_ids']
-        
+
         # print(f"Updating annotations {annotation_ids} in task {task_id} to new label {new_label_id}")
 
         result = cvat_service.update_annotation_labels(task_id, annotation_ids, new_label_id)
@@ -730,7 +734,7 @@ def update_annotation_labels():
             'result': result,
             'success': True
         })
-        
+
     except Exception as e:
         print(f"Error updating annotation: {e}")
         return jsonify({"error": str(e)}), 500
