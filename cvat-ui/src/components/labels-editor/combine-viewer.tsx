@@ -31,7 +31,7 @@ function CombineViewer(props: Props): JSX.Element {
         const values: number[] = [];
         const colors: string[] = [];
         const heights: number[] = [];
-        const processedLabels: { [key: string]: number } = {};
+        const audio_node_counts = { "M1_Abrams_Tank":439, "M88_Recovery_Vehicle":228, "M777_Lightweight_Towed_Howitzer": 153, "Landing_Craft_Utility": 161, "V_22_Osprey": 114, "Light_Armored_Vehicle_25": 51, "High_Mobility_Multipurpose_Wheeled_Vehicle": 158, "Landing_Craft_Air_Cushion":1 }
 
         const getNodeColor = (height: number, isSelected: boolean, selectedColor?: string, nodeCount?: number): string => {
 
@@ -41,7 +41,7 @@ function CombineViewer(props: Props): JSX.Element {
             const base_audio_color = "#00ffff";
             console.log("getting color for", height, selectedColor, nodeCount);
 
-            if (nodeCount && nodeCount < 500) {
+            if (nodeCount && Object.values(audio_node_counts).includes(nodeCount)) {
                 console.log("audio color selected")
                 color = base_audio_color;
             }
@@ -56,17 +56,10 @@ function CombineViewer(props: Props): JSX.Element {
             const nodeName = node.name;
             const nodeCount = node.count;
             console.log("nodeCount", nodeName, nodeCount);
-            let currentIdx: number;
-
-            if (nodeName in processedLabels) {
-                currentIdx = processedLabels[nodeName];
-            } else {
-                currentIdx = labels.length;
-                labels.push(nodeName);
-                colors.push(getNodeColor(height, false, selectedColor, nodeCount));
-                heights.push(height);
-                processedLabels[nodeName] = currentIdx;
-            }
+            const currentIdx = labels.length;
+            labels.push(nodeName);
+            colors.push(getNodeColor(height, false, selectedColor, nodeCount));
+            heights.push(height);
 
             if (parentIdx >= 0) {
                 sources.push(currentIdx);
@@ -99,7 +92,7 @@ function CombineViewer(props: Props): JSX.Element {
                 //Remove the word dataset from the label name
                 label_name = label_name.replace('_dataset', '');
 
-                setCocoLabels(prev => ({
+                setCocoLabels((prev: { [key: string]: number }) => ({
                     ...prev,
                     [label_name]: Object.keys(prev).length + 1
                 }));
@@ -124,8 +117,8 @@ function CombineViewer(props: Props): JSX.Element {
             type: "sankey",
             orientation: "h",
             node: {
-                pad: 15,
-                thickness: 30,
+                pad: 30,
+                thickness: 40,
                 line: { color: "black", width: 0.1 },
                 label: labels,
                 color: colors
@@ -143,11 +136,6 @@ function CombineViewer(props: Props): JSX.Element {
                     }
                     return 'rgba(150, 150, 150, 0.2)';
                 }),
-                // Add animation properties
-                customdata: sources.map((_, idx) => ({
-                    duration: heights[targets[idx]] * 500, // Cascade animation based on height
-                    easing: 'cubic-in-out'
-                }))
             }
         }];
     };
@@ -223,13 +211,16 @@ function CombineViewer(props: Props): JSX.Element {
         },
         paper_bgcolor: '#FFFFFF',
         plot_bgcolor: '#FFFFFF',
-        width: 950,
-        height: 600,
+        width: 1050,
+        height: 550,
         margin: {
             l: 25,
             r: 25,
             t: 40,
-            b: 20
+            b: 0
+        },
+        transition: {
+            duration: 0,
         },
         clickmode: 'event',
         showlegend: true,
@@ -378,7 +369,7 @@ function CombineViewer(props: Props): JSX.Element {
                             ],
                             dragmode: false
                         }}
-                        onClick={(data) => {
+                        onClick={(data: any) => {
                             console.log("clicked!", data);
                             if (data.points && data.points[0]) {
                                 const point = data.points[0];
@@ -398,7 +389,7 @@ function CombineViewer(props: Props): JSX.Element {
                                 }
                             }
                         }}
-                        onUpdate={(figure) => {
+                        onUpdate={(figure: any) => {
                             console.log("Update event triggered", {
                                 updateInProgress: updateInProgressRef.current,
                                 figure: figure
@@ -442,7 +433,7 @@ function CombineViewer(props: Props): JSX.Element {
                                         });
 
                                         setSelectedHeight(height);
-                                        setSelectedColor(prevColor => prevColor === color ? null : color);
+                                        setSelectedColor((prevColor: string | null) => (prevColor === color ? null : color));
 
                                         setTimeout(() => {
                                             updateInProgressRef.current = false;

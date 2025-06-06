@@ -21,7 +21,7 @@ class EmbeddingService:
 
         # Add caches with size limits
         self.MAX_FRAME_CACHE_SIZE = 2000
-        self.MAX_CHIP_CACHE_SIZE = 20000
+        self.MAX_CHIP_CACHE_SIZE = 100000
         self._frame_cache = OrderedDict()  # frame_key -> PIL.Image
         self._chip_cache = OrderedDict()   # chip_key -> PIL.Image
 
@@ -216,8 +216,8 @@ class EmbeddingService:
 
                 description = self.generate_description(chip, semantic_model, lvlm_prompt)
                 #Save chip to file
-                print(f"Saving chip to file chip_{task_id}_{frame_id}_{shape['id']}.png")
-                chip.save(f"chip_{task_id}_{frame_id}_{shape['id']}.png")
+                # print(f"Saving chip to file chip_{task_id}_{frame_id}_{shape['id']}.png")
+                # chip.save(f"chip_{task_id}_{frame_id}_{shape['id']}.png")
                 text_embedding = self.generate_text_embedding(description, text_embedding_model)
                 img_embedding = self.generate_image_embedding(chip, visual_model)
 

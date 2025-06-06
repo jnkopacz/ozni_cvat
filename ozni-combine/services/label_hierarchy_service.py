@@ -7,6 +7,32 @@ from config import OLLAMA_HOST, COMBINE_MODEL, LABEL_SUGGESTION_MODEL
 import os
 import datetime
 
+instruction_context = """
+Every major category of U.S. military equipment is given an officially-assigned type designation under the DoDs Defense Standardization Program, but there isnt a single “one-size-fits-all” SOP—each service and equipment domain uses its own standard.
+
+LCAC Naming Program: Naval Hull Classification Symbol (SECNAVINST 5030.8D) Standardized Name: Landing Craft, Air Cushion. Approved Item Name: N/A Item Name Code: N/A Type Designation: LCAC Popular Name: N/A
+HUMVEE Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: TRUCK, UTILITY: High Mobility Multipurpose Wheeled Vehicle. Approved Item Name: TRUCK, UTILITY Item Name Code: 11354 Type Designation: M998 Popular Name: Humvee
+LAV-25 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: VEHICLE, WHEELED: Amphibious: Light Armored Vehicle, 8-Wheel, 25-mm Cannon. Approved Item Name: VEHICLE, WHEELED: AMPHIBIOUS 25-MM CANNON Item Name Code: 36857 Type Designation: LAV-25 Popular Name: N/A
+Osprey Naming Program: Mission Design Series (DoD Dir 4120.15E / AFI 16-401 / NAVAIRINST 13100.16) Standardized Name: V-22. Approved Item Name: N/A Item Name Code: N/A Type Designation: V-22B Popular Name: Osprey
+M88 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Recovery Vehicle, Full Tracked: Medium, M88. Approved Item Name: RECOVERY VEHICLE, FULL TRACKED Item Name Code: 11124 Type Designation: M88 Popular Name: N/A
+M1A1 AbramsNaming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Tank, Combat, Full Tracked: 120-mm Gun, M1A1. Approved Item Name: TANK, COMBAT, FULL TRACKED Item Name Code: N/A Type Designation: M1A1 Popular Name: Abrams
+M777 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Howitzer, Medium, Towed: 155-mm, M777A2. Approved Item Name: HOWITZER, MEDIUM, TOWED Item Name Code: 21619 Type Designation: M777A2 Popular Name: M777 Howitzer
+LCU Naming Program: Naval Hull Classification Symbol (SECNAVINST 5030.8D) Standardized Name: Landing Craft, Utility. Approved Item Name: N/A Item Name Code: N/A Type Designation: LCU Popular Name: N/A"""
+
+
+# instruction_context = """
+# Every major category of U.S. military equipment is given an officially-assigned type designation under the DoDs Defense Standardization Program, but there isnt a single “one-size-fits-all” SOP—each service and equipment domain uses its own standard.
+
+# LCAC Naming Program: Naval Hull Classification Symbol (SECNAVINST 5030.8D) Standardized Name: Landing Craft, Air Cushion. Approved Item Name: N/A Item Name Code: N/A Type Designation: LCAC Popular Name: N/A
+# HUMVEE Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: TRUCK, UTILITY: High Mobility Multipurpose Wheeled Vehicle. Approved Item Name: TRUCK, UTILITY Item Name Code: 11354 Type Designation: M998 Popular Name: Humvee
+# LAV-25 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: VEHICLE, WHEELED: Amphibious: Light Armored Vehicle, 8-Wheel, 25-mm Cannon. Approved Item Name: VEHICLE, WHEELED: AMPHIBIOUS 25-MM CANNON Item Name Code: 36857 Type Designation: LAV-25 Popular Name: N/A
+# Osprey Naming Program: Mission Design Series (DoD Dir 4120.15E / AFI 16-401 / NAVAIRINST 13100.16) Standardized Name: V-22. Approved Item Name: N/A Item Name Code: N/A Type Designation: V-22B Popular Name: Osprey
+# M88 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Recovery Vehicle, Full Tracked: Medium, M88. Approved Item Name: RECOVERY VEHICLE, FULL TRACKED Item Name Code: 11124 Type Designation: M88 Popular Name: N/A
+# M1A1 AbramsNaming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Tank, Combat, Full Tracked: 120-mm Gun, M1A1. Approved Item Name: TANK, COMBAT, FULL TRACKED Item Name Code: N/A Type Designation: M1A1 Popular Name: Abrams
+# M777 Naming Program: Army Nomenclature System (MIL-STD-1464A)Standardized Name: Howitzer, Medium, Towed: 155-mm, M777A2. Approved Item Name: HOWITZER, MEDIUM, TOWED Item Name Code: 21619 Type Designation: M777A2 Popular Name: M777 Howitzer
+# LCU Naming Program: Naval Hull Classification Symbol (SECNAVINST 5030.8D) Standardized Name: Landing Craft, Utility. Approved Item Name: N/A Item Name Code: N/A Type Designation: LCU Popular Name: N/A"""
+
+
 class LabelHierarchyService:
     def __init__(self, cvat_service: CVATService, embedding_service: EmbeddingService):
         self.cvat_service = cvat_service
@@ -48,6 +74,16 @@ class LabelHierarchyService:
 
 # You must use all input labels as base first level leaf nodes. Use the second level to merge duplicate or nearly identical labels.
 # 4. The frequency of each label when determining importance
+# Follow these guidlines to help understand the provided labels: {instruction_context}
+
+
+# The hierarchy should be a 4 layer hierarchy:
+# Layer 1: EXACTLY the provided labels above (e.g. V22_VTOL)
+# Layer 2: Merge all similar labels (e.g. V22_VTOL, V-22, and V_22_Osprey) should be merged to "V-22 Osprey"
+# Layer 3: Categories (e.g. aircraft, armored vehicle, etc.)
+# Layer 4: Logical summary level (e.g. military vehicles)
+
+# It is okay to reuse the same label in multiple places in the hierarchy if necessary. For example at the first level, LCU, LCU1627, Landing_Craft_Utility should flow into the second level LCU.
 
         label_info = [f"{label} " for label, count in labels.items()]
         prompt = f"""Given these labels from a computer vision dataset: {', '.join(label_info)}
@@ -57,7 +93,8 @@ Please analyze these labels and create a hierarchical categorization structure. 
 2. Natural subcategories within each group
 3. Any implicit relationships between labels
 
-The hierarchy should be a 4 layer hierarchy with the first level being the provided labels, the second level merging similar labels, the third level being the subcategories, and the fourth level being a logical summary level.
+The hierarchy should be a 4 layer hierarchy with the first level being the provided labels, the second level merging similar labels (Howitzer), the third level being the high level categories (aircraft, landing craft), and the fourth level being a logical summary level (vehicles).
+
 
 Output the hierarchy as a JSON structure with these properties:
 - Each node should have a "name" and "children" array
@@ -69,12 +106,15 @@ Format the response as valid JSON only, no additional text."""
         print("Prompt", prompt)
         # Get LLM response using the embedding service's GPT-4V capabilities
         try:
+            print("Generating response")
             response = self.ollama_client.generate(
                 model=COMBINE_MODEL,
                 prompt=prompt,
                 format="json"
             )
             # Parse the response as JSON
+            print("Done!")
+            print("Response", response)
             hierarchy = json.loads(response.response)
 
 
@@ -213,3 +253,6 @@ Respond with only the suggested label, no additional text or explanation."""
         except Exception as e:
             print(f"Error generating label suggestion: {e}")
             return "Unknown"
+
+### Block comment
+# Given these labels from a computer vision dataset, logically group them [{parent: child, child, child}] to remove duplicates. You must use each label as a child, even if it is redundant with a parent. Example: {LCAC: LCAC100_SSC, LCAC, Landing_Craft_Air_Cushion} LCAC100_SSC , M1151_HMMWV , LAV25_ARV , V22_VTOL , M88_ARV , M1A1_MBT , M777_ART , LCU1627_LCU , LCAC , HUMVEE , LAV-25 , Osprey , m88 , m1a1abrams , M777Howitzer , LCU , M1_Abrams_Tank , M88_Recovery_Vehicle , M777_Lightweight_Towed_Howitzer , Landing_Craft_Utility , V_22_Osprey , Light_Armored_Vehicle_25 , High_Mobility_Multipurpose_Wheeled_Vehicle , Landing_Craft_Air_Cushion
