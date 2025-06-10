@@ -60,10 +60,13 @@ class EmbeddingService:
         cache_key = self._get_frame_cache_key(task_id, frame_id)
 
         if cache_key in self._frame_cache:
+            print(f"Frame cache hit for task {task_id}, frame {frame_id}")
             return self._frame_cache[cache_key]
 
         # Load frame using provided function
+        t = time.time()
         frame = frame_loader()
+        print(f"Time taken for frame loader: {time.time() - t} seconds")
 
         # Add to cache with size limit
         if len(self._frame_cache) >= self.MAX_FRAME_CACHE_SIZE:
@@ -77,23 +80,23 @@ class EmbeddingService:
         cache_key = self._get_chip_cache_key(task_id, frame_id, shape_id)
 
         if cache_key in self._chip_cache:
+            print(f"Chip cache hit for task {task_id}, frame {frame_id}, shape {shape_id}")
             return self._chip_cache[cache_key]
 
         if frame is None or shape is None:
+            print(f"Chip not found in cache")
             return None
 
-        chip = self.extract_chip(frame, shape, over_clip=over_clip)
+        # Extract chip from preloaded frame
+        t = time.time()
+        frame.load()
+        print(f"Time taken to load frame: {time.time() - t} seconds")
+
+        t = time.time()
+        chip = self.extract_chip(frame, shape)
+        print(f"Time taken to extract chip from preloaded frame..: {time.time() - t} seconds")
         if chip is None:
             return None
-
-        inflation_tries = 5
-        over_clip = 1.0
-        while min(chip.size) < 140 and inflation_tries > 0:
-            print(f"Chip dimensions: {chip.size}, trying again with over_clip {over_clip}")
-            chip = self.extract_chip(frame, shape, over_clip=over_clip)
-            over_clip += 1
-            inflation_tries -= 1
-        print(f"Chip dimensions: {chip.size}")
 
         # Add to cache with size limit
         if len(self._chip_cache) >= self.MAX_CHIP_CACHE_SIZE:
@@ -102,32 +105,40 @@ class EmbeddingService:
 
         return chip
 
-    def extract_chip(self, image, shape, over_clip=1.0):
+    def extract_chip(self, image, shape, min_size=140):
         """Extract a chip from an image based on annotation shape
 
         Args:
             image: PIL Image
             shape: Annotation shape dictionary
-            over_clip: Float multiplier for chip size (e.g. 2.0 = 2x larger in all dimensions)
+            min_size: Minimum size for the smallest dimension of the chip
         """
         if shape['type'] == "rectangle":
             x1, y1, x2, y2 = map(int, shape['points'])
 
-            # Calculate center point and dimensions
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
+            # Start with base dimensions
             width = x2 - x1
             height = y2 - y1
 
-            # Calculate new dimensions with over_clip
-            new_width = width * over_clip
-            new_height = height * over_clip
+            # Calculate required scaling to meet minimum size
+            if min(width, height) < min_size:
+                scale = min_size / min(width, height)
+            else:
+                scale = 1.0
+
+            # Calculate center point
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+
+            # Calculate new dimensions with scaling
+            new_width = width * scale
+            new_height = height * scale
 
             # Calculate new coordinates, ensuring they stay within image bounds
-            new_x1 = max(0, int(center_x - new_width / 2))
-            new_y1 = max(0, int(center_y - new_height / 2))
-            new_x2 = min(image.width, int(center_x + new_width / 2))
-            new_y2 = min(image.height, int(center_y + new_height / 2))
+            new_x1 = int(max(0, int(center_x - new_width / 2)))
+            new_y1 = int(max(0, int(center_y - new_height / 2)))
+            new_x2 = int(min(image.width, int(center_x + new_width / 2)))
+            new_y2 = int(min(image.height, int(center_y + new_height / 2)))
 
             chip = image.crop((new_x1, new_y1, new_x2, new_y2))
             return chip

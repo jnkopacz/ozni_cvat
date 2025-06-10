@@ -28,22 +28,22 @@ const SessionProgressTracker: React.FC = () => {
 
   const getEstimatedTimeRemaining = (): string => {
     if (stats.labeledChips === 0) return 'Calculating...';
-    
+
     const avgTimePerChip = stats.sessionDuration / stats.labeledChips;
     const estimatedRemaining = avgTimePerChip * stats.remainingChips;
-    
+
     return formatDuration(estimatedRemaining);
   };
 
   const getLabelBreakdown = () => {
     if (!state.session) return [];
-    
+
     const labelCounts = new Map<string, number>();
-    
+
     state.session.chipLabels.forEach((label) => {
       labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
     });
-    
+
     return Array.from(labelCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10); // Show top 10 labels
@@ -150,7 +150,7 @@ const SessionProgressTracker: React.FC = () => {
         </>
       )}
 
-      {stats.progressPercentage === 100 && (
+      {(true || stats.progressPercentage === 100) && (
         <>
           <Divider style={{ margin: '12px 0' }} />
           <div className="cvat-session-progress-complete">
@@ -160,11 +160,11 @@ const SessionProgressTracker: React.FC = () => {
                 Labeling session complete! All chips have been labeled.
               </Text>
             </div>
-            
+
             {state.completionStatus.isCompleting ? (
               <div>
-                <Progress 
-                  percent={state.completionStatus.completionProgress} 
+                <Progress
+                  percent={state.completionStatus.completionProgress}
                   status="active"
                   strokeColor="#52c41a"
                   size="small"
@@ -174,8 +174,8 @@ const SessionProgressTracker: React.FC = () => {
                 </Text>
               </div>
             ) : (
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 icon={<CloudUploadOutlined />}
                 onClick={() => setShowCompletionModal(true)}
                 disabled={state.completionStatus.isCompleting}
@@ -183,13 +183,13 @@ const SessionProgressTracker: React.FC = () => {
                 Save New Labels
               </Button>
             )}
-            
+
             {state.completionStatus.completionError && (
-              <Alert 
-                message="Completion Error" 
+              <Alert
+                message="Completion Error"
                 description={state.completionStatus.completionError}
-                type="error" 
-                showIcon 
+                type="error"
+                showIcon
                 style={{ marginTop: 8 }}
                 closable
               />
@@ -197,7 +197,7 @@ const SessionProgressTracker: React.FC = () => {
           </div>
         </>
       )}
-      
+
       <Modal
         title="Complete Labeling Session"
         open={showCompletionModal}

@@ -19,6 +19,7 @@ ozni-combine/examples/*pkl
 ozni-combine/examples/*html
 ozni-combine/chip*png
 ozni-combine/*.html
+ozni-combine/cache/*json
 
 # Ignore temporary files
 docker-compose.override.yml

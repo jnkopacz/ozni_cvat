@@ -93,7 +93,7 @@ Please analyze these labels and create a hierarchical categorization structure. 
 2. Natural subcategories within each group
 3. Any implicit relationships between labels
 
-The hierarchy should be a 4 layer hierarchy with the first level being the provided labels, the second level merging similar labels (Howitzer), the third level being the high level categories (aircraft, landing craft), and the fourth level being a logical summary level (vehicles).
+The hierarchy should be a 4 layer hierarchy with the first level being the provided labels, the second level merging similar labels (Howitzer), the third level being the high level categories (aircraft, landing craft), and the fourth level being a logical summary level (vehicle).
 
 
 Output the hierarchy as a JSON structure with these properties:

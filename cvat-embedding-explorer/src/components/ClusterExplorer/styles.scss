@@ -251,7 +251,7 @@
   left: 16px;
   z-index: 20;
   pointer-events: auto;
-  
+
   .ant-input-search {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border-radius: 6px;
@@ -266,7 +266,7 @@
   pointer-events: auto;
   display: flex;
   gap: 8px;
-  
+
   .ant-btn {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
@@ -277,12 +277,12 @@
     max-height: 500px;
     overflow-y: auto;
     overflow-x: hidden; // Prevent horizontal scroll
-    
+
     // Ensure the Row component doesn't exceed container width
     .ant-row {
       margin-left: -8px !important;
       margin-right: -8px !important;
-      
+
       .ant-col {
         padding-left: 8px !important;
         padding-right: 8px !important;
@@ -325,7 +325,8 @@
 
     img {
       height: 180px;
-      object-fit: cover;
+      object-fit: contain;
+      background-color: #f5f5f5;
     }
 
     .ant-card-body {
@@ -447,7 +448,7 @@
 // Session Progress Tracker Styles
 .cvat-session-progress-tracker {
   margin-bottom: 16px;
-  
+
   .cvat-session-progress-header {
     display: flex;
     justify-content: space-between;
@@ -455,13 +456,13 @@
     // margin-bottom: 16px;
     margin-top: 16px;
   }
-  
+
   .cvat-session-progress-main {
     margin-bottom: 16px;
-    
+
     .cvat-session-progress-bar-container {
       position: relative;
-      
+
       .cvat-session-progress-text {
         position: absolute;
         top: 50%;
@@ -476,7 +477,7 @@
         font-size: 12px;
         white-space: nowrap;
         z-index: 1;
-        
+
         @media (max-width: 768px) {
           position: static;
           transform: none;
@@ -488,11 +489,11 @@
       }
     }
   }
-  
+
   .cvat-session-progress-stats {
     // margin-bottom: 16px;
   }
-  
+
   .cvat-session-progress-labels {
     .cvat-session-progress-label-tags {
       display: flex;
@@ -500,7 +501,7 @@
       gap: 4px;
     }
   }
-  
+
   .cvat-session-progress-complete {
     display: flex;
     align-items: center;
@@ -517,7 +518,7 @@
 .cvat-chip-viewer {
   .cvat-chip-viewer-section {
     margin-bottom: 24px;
-    
+
     .cvat-chip-viewer-section-header {
       display: flex;
       justify-content: space-between;
@@ -527,31 +528,32 @@
       border-bottom: 1px solid #f0f0f0;
     }
   }
-  
+
   .cvat-chip-viewer-excluded {
     background: #fafafa;
     padding: 16px;
     border-radius: 6px;
     border: 1px dashed #d9d9d9;
   }
-  
+
   .cvat-chip-card {
     transition: all 0.3s ease;
-    
+
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
-    
+
     .cvat-chip-card-image-container {
       position: relative;
-      
+      background-color: #f5f5f5;
+
       img {
         width: 100%;
         height: 180px;
-        object-fit: cover;
+        object-fit: contain;
       }
-      
+
       .cvat-chip-card-exclude-btn,
       .cvat-chip-card-include-btn {
         position: absolute;
@@ -560,7 +562,7 @@
         opacity: 0;
         transition: opacity 0.2s ease;
       }
-      
+
       &:hover {
         .cvat-chip-card-exclude-btn,
         .cvat-chip-card-include-btn {
@@ -568,7 +570,7 @@
         }
       }
     }
-    
+
     .cvat-chip-card-content {
       display: flex;
       flex-direction: column;
@@ -593,15 +595,15 @@
       -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
     }
-    
+
     &.cvat-chip-card-selected {
       border-color: #1890ff;
       box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
     }
-    
+
     &.cvat-chip-card-excluded {
       opacity: 0.7;
-      
+
       .cvat-chip-card-image-container {
         &::after {
           content: '';
@@ -614,7 +616,7 @@
           pointer-events: none;
         }
       }
-      
+
       .cvat-chip-card-include-btn {
         opacity: 1 !important;
       }

@@ -12,6 +12,8 @@ import re
 import traceback
 from pathlib import Path
 import mimetypes
+import time
+import traceback
 
 from services.cvat_service import CVATService
 from services.embedding_service import EmbeddingService
@@ -125,6 +127,9 @@ def get_annotations():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+
 @app.route('/api/embeddings/check', methods=['GET'])
 def check_embeddings():
     """Check if embeddings exist for a project ID"""
@@ -219,6 +224,7 @@ def process_embedding_job(job_id):
         total_frames_to_process = 0
         processed_frames = 0
         total_annotations_to_process = 0
+        start_time = time.time()
 
         # First count total frames with annotations to track progress
         for task_id in job.task_ids:
@@ -279,17 +285,45 @@ def process_embedding_job(job_id):
 
                 all_chips_data.extend(chips_data)
                 processed_frames += 1
+
+                try:
+                    elapsed_time = time.time() - start_time
+                    if len(all_chips_data) > 0:
+                        chip_rate = elapsed_time / len(all_chips_data) # Seconds per chip
+                    else:
+                        chip_rate = 4
+                    print("--------------------------------")
+                    print("STATUS REPORT")
+                    print(f"Processed {processed_frames} frames in {elapsed_time} seconds. Chip processing rate: {chip_rate} s/chip")
+                except Exception as e:
+                    print(f"Error calculating frame rate: {e}")
+
                 if job.chip_limit > 0:
-                    print(f"Processed {len(all_chips_data)} frames of {job.chip_limit}")
+                    try:
+                        print(f"Processed {len(all_chips_data)} frames of limit: {job.chip_limit}")
+                        remaining_chips = job.chip_limit - len(all_chips_data)
+                        print(f"Remaining chips: {remaining_chips}")
+                        print(f"Time remaining: {remaining_chips * chip_rate} seconds")
+                    except Exception as e:
+                        print(f"Error calculating remaining chips: {e}")
                     job.progress = min(99, int(100 * len(all_chips_data) / job.chip_limit))
+
+                    # Check if we've reached the chip limit
                     if len(all_chips_data) >= job.chip_limit:
                         break
 
                 else:
-                    print(f"Processed {len(all_chips_data)} frames of {total_annotations_to_process}")
+                    try:
+                        print(f"Processed {len(all_chips_data)} frames of limit: {total_annotations_to_process}")
+                        remaining_chips = total_annotations_to_process - len(all_chips_data)
+                        print(f"Remaining chips: {remaining_chips}")
+                        print(f"Time remaining: {remaining_chips * chip_rate} seconds")
+                    except Exception as e:
+                        print(f"Error calculating remaining chips: {e}")
                     job.progress = min(99, int(100 * len(all_chips_data) / total_annotations_to_process))
                     if len(all_chips_data) >= total_annotations_to_process:
                         break
+                print("--------------------------------")
 
                 # Check if we've reached the chip limit
 
@@ -414,11 +448,74 @@ def get_visualization_data():
 
     # Check if embeddings are in memory, if not try to load from disk
     if project_id not in embeddings_cache:
+        print("Loading embeddings from disk...")
         if not load_embeddings_from_disk(project_id):
             return jsonify({"error": "Embeddings not found. Run embedding job first."}), 404
 
     # Get embedding data
     embedding_data = embeddings_cache[project_id]
+
+
+    project_labels = cvat_service.get_project_labels(project_id)
+    project_labels_dict = {x['id']: x['name'] for x in project_labels}
+    # print("project_labels:")
+
+    # Todo, filter out embeddings that have the "vehicle" label. Need to fetch annotations first then compare
+    tasks_ids = [x['id'] for x in cvat_service.get_tasks(project_id)]
+    job_id = 37 #TODO: Get this from the job_id in the embedding_data? But it's a hash, so not sure
+    filenames_to_remove = []
+    for task_id in tasks_ids:
+        annotations = cvat_service.get_annotations(task_id, no_cache=True)
+        for anno in annotations:
+            label_name = project_labels_dict[anno['label']]
+            if label_name != 'vehicle':
+                chip_filename = f"task{task_id}_job{job_id}_frame{anno['frame']}_anno{anno['id']}.png"
+                filenames_to_remove.append(chip_filename)
+    print("get_visualization_data...embedding_data keys:")
+    print(embedding_data.keys())
+    print('descriptions', len(embedding_data['descriptions']))
+    print('raw_data', len(embedding_data['raw_data']))
+    print('embeddings', len(embedding_data['embeddings']))
+    print('clusters', len(embedding_data['clusters']))
+    print('reduced_embeddings', len(embedding_data['reduced_embeddings']))
+    print('reduced embeddings shape', embedding_data['reduced_embeddings'].shape)
+    print('selected_embeddings', len(embedding_data['selected_embeddings']))
+
+    print('filenames_to_remove', len(filenames_to_remove))
+    indexes_to_remove = []
+    for i, (filename, description) in enumerate(embedding_data['descriptions']):
+        if filename in filenames_to_remove:
+            indexes_to_remove.append(i)
+    print('indexes_to_remove', indexes_to_remove)
+
+    #Remove the indexes from the descriptions, raw_data, embeddings, clusters, reduced_embeddings, selected_embeddings
+    embedding_data['descriptions'] = [embedding_data['descriptions'][i] for i in range(len(embedding_data['descriptions'])) if i not in indexes_to_remove]
+    embedding_data['raw_data'] = [embedding_data['raw_data'][i] for i in range(len(embedding_data['raw_data'])) if i not in indexes_to_remove]
+    embedding_data['embeddings'] = [embedding_data['embeddings'][i] for i in range(len(embedding_data['embeddings'])) if i not in indexes_to_remove]
+    embedding_data['clusters'] = [embedding_data['clusters'][i] for i in range(len(embedding_data['clusters'])) if i not in indexes_to_remove]
+    # embedding_data['reduced_embeddings'] = [embedding_data['reduced_embeddings'][i] for i in range(len(embedding_data['reduced_embeddings'])) if i not in indexes_to_remove]
+    # reduced embeddings is a numpy array, so we need to remove the rows
+    embedding_data['reduced_embeddings'] = np.delete(embedding_data['reduced_embeddings'], indexes_to_remove, axis=0)
+    embedding_data['selected_embeddings'] = [embedding_data['selected_embeddings'][i] for i in range(len(embedding_data['selected_embeddings'])) if i not in indexes_to_remove]
+
+    print("FILTERED!")
+    print('descriptions', len(embedding_data['descriptions']))
+    print('raw_data', len(embedding_data['raw_data']))
+    print('embeddings', len(embedding_data['embeddings']))
+    print('clusters', len(embedding_data['clusters']))
+    print('reduced_embeddings', len(embedding_data['reduced_embeddings']))
+    print('selected_embeddings', len(embedding_data['selected_embeddings']))
+
+
+    # print('reducer', len(embedding_data['reducer'])) #Type of UMAP (reducer obj)
+    print('job_id', embedding_data['job_id'])
+    print('feature_type', embedding_data['feature_type'])
+
+
+    # embedding_data['raw_data'] = [chip for chip in embedding_data['raw_data'] if chip[1] != 'vehicle']
+    # print("embedding_data['raw_data'] keys:")
+    # print(embedding_data['raw_data'][0])
+    # print(embedding_data['raw_data'][0].keys())
 
     # Set visualization parameters
     display_dims = data.get('display_dims', 3)
@@ -433,6 +530,7 @@ def get_visualization_data():
             reduced_embeddings = embedding_data['reduced_embeddings']
 
             # If we need fewer dimensions than we have, use the existing reducer
+
             if display_dims <= reduced_embeddings.shape[1]:
                 reduced_embeddings = reduced_embeddings[:, :display_dims]
             else:
@@ -477,6 +575,8 @@ def get_visualization_data():
         })
 
     except Exception as e:
+        print(f"Error getting visualization data: {e}")
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chip/<project_id>/<path:filename>', methods=['GET'])
@@ -484,22 +584,22 @@ def get_chip_image(project_id, filename):
     """Get a specific chip image with improved caching"""
     print(f"Getting chip image for {filename}")
     # Check if embeddings are in memory, if not try to load from disk
-    if project_id not in embeddings_cache:
-        if not load_embeddings_from_disk(project_id):
-            return jsonify({"error": "Project embeddings not found"}), 404
+    # if project_id not in embeddings_cache:
+    #     if not load_embeddings_from_disk(project_id):
+    #         return jsonify({"error": "Project embeddings not found"}), 404
 
-    embedding_data = embeddings_cache[project_id]
+    # embedding_data = embeddings_cache[project_id]
 
-    # Find the chip data
-    chip_data = None
-    for data in embedding_data['raw_data']:
-        if data[0] == filename:
-            print(f"Found chip data for {filename} in cache")
-            chip_data = data
-            break
+    # # Find the chip data
+    # chip_data = None
+    # for data in embedding_data['raw_data']:
+    #     if data[0] == filename:
+    #         print(f"Found chip data for {filename} in cache")
+    #         chip_data = data
+    #         break
 
-    if not chip_data:
-        return jsonify({"error": "Chip not found"}), 404
+    # if not chip_data:
+    #     return jsonify({"error": "Chip not found"}), 404
 
     # Extract task_id, frame_id from filename
     parts = filename.split('_')
@@ -511,22 +611,35 @@ def get_chip_image(project_id, filename):
     chip = embedding_service.get_chip(task_id, frame_id, anno_id)
 
     if chip is None:
+        print("Chip not found in cache, getting from CVAT (slow)")
         # Get frame using embedding service cache
-        frame_data = embedding_service.get_frame(
-            task_id,
-            int(frame_id),
-            lambda: cvat_service.get_frame(task_id, int(frame_id))
-        )
+        t = time.time()
+
+        frame_data = cvat_service.get_frame(task_id, int(frame_id))
+        # frame_data = embedding_service.get_frame(
+        #     task_id,
+        #     int(frame_id),
+        #     lambda: cvat_service.get_frame(task_id, int(frame_id))
+        # )
+        print(f"Time taken to get frame: {time.time() - t} seconds")
 
         # Get the annotation
+        t = time.time()
         annotations = cvat_service.get_annotations(task_id)
+        print(f"Time taken to get annotations: {time.time() - t} seconds")
+
+        t = time.time()
         shape = next((s for s in annotations if str(s['id']) == anno_id), None)
+        print(f"Time taken to get shape in annos: {time.time() - t} seconds")
 
         if not shape:
             return jsonify({"error": "Annotation not found"}), 404
 
         # Extract and cache the chip
+        t = time.time()
+        print(f"Second get chip call (due to cache miss)")
         chip = embedding_service.get_chip(task_id, frame_id, anno_id, frame_data, shape)
+        print(f"Time taken to get chip: {time.time() - t} seconds")
         if chip is None:
             return jsonify({"error": "Failed to extract chip"}), 500
 
